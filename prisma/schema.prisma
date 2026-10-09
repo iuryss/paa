@@ -1,0 +1,298 @@
+// Plataforma educacional adaptativa para crianças com TEA.
+// LGPD: alunos NÃO têm e-mail, nome completo, data de nascimento nem documento.
+// Identificação do aluno = `displayName` (apelido) + `studentCode` (código opaco).
+// Dados de adultos (professor/terapeuta) ficam apenas em User.email / passwordHash.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────── Enums ─────────────────────────
+
+enum Role {
+  TEACHER
+  THERAPIST
+  STUDENT
+}
+
+/// Temas sensoriais do design system (data-theme no <html>).
+enum SensoryTheme {
+  CALMO     // Baixo Estímulo (padrão)
+  FOCO      // Foco Alto
+  CONTRASTE // Alto Contraste
+}
+
+/// Modo de apresentação do conteúdo.
+enum ContentMode {
+  TEXTUAL      // Textual/Focal
+  PICTOGRAFICO // PECS
+}
+
+/// Famílias tipográficas do design system.
+enum FontFamily {
+  SANS    // Nunito
+  LEITURA // Atkinson Hyperlegible
+}
+
+enum ActivityModule {
+  LOCALIZACAO
+  GRAFIA
+  MATEMATICA
+  CIENCIAS
+}
+
+enum Difficulty {
+  INICIAL
+  INTERMEDIARIO
+  AVANCADO
+}
+
+/// Nível de ajuda usado na tentativa (0 = nenhuma). Não punitivo.
+enum HelpLevel {
+  NONE
+  VERBAL_HINT  // dica falada/escrita
+  VISUAL_HINT  // encaixe certo destacado
+  FULL_MODEL   // modelo completo / ajuda do adulto
+}
+
+enum SessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum ConsentStatus {
+  GRANTED
+  REVOKED
+}
+
+// ───────────────────────── Usuários ─────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  role         Role
+  /// Obrigatório para TEACHER/THERAPIST; NULL para STUDENT (zero PII infantil).
+  email        String?  @unique
+  passwordHash String?  // argon2/bcrypt; NULL para aluno que entra por código+PIN
+  /// Aluno: apelido ("Sol"). Adulto: nome de exibição.
+  displayName  String
+  /// Código opaco de acesso do aluno (ex.: "K7M2-QX9P"). NULL para adultos.
+  studentCode  String?  @unique
+  /// Hash do PIN de 4 dígitos do aluno.
+  pinHash      String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sensoryProfile SensoryProfile?
+
+  // Relação adulto -> aluno
+  guidedStudents Guidance[] @relation("GuideAdult")
+  guidances      Guidance[] @relation("GuideStudent")
+
+  createdActivities Activity[]       @relation("ActivityAuthor")
+  assignmentsMade   Assignment[]     @relation("AssignmentAssigner")
+  assignments       Assignment[]     @relation("AssignmentStudent")
+  sessions          ActivitySession[]
+  consents          ConsentRecord[]  @relation("ConsentStudent")
+  grantedConsents   ConsentRecord[]  @relation("ConsentGrantor")
+  auditLogs         AuditLog[]
+  invitationsSent   Invitation[]     @relation("InvitationAuthor")
+  passwordResets    PasswordReset[]
+
+  @@index([role])
+}
+
+/// Pedido de redefinição de senha ("esqueci minha senha"). Link de uso único e curta duração.
+/// Como no convite, só o hash SHA-256 do token é guardado.
+model PasswordReset {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Convite para um novo professor/terapeuta criar a própria conta (link de uso único).
+/// O token em si NUNCA é guardado: só o hash SHA-256 (quem ler o banco não consegue usar o link).
+model Invitation {
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique
+  email       String
+  role        Role
+  displayName String
+  invitedById String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  invitedBy User @relation("InvitationAuthor", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([email])
+}
+
+/// Vínculo professor/terapeuta ↔ aluno. Autoriza o adulto a ver dados do aluno.
+model Guidance {
+  id        String   @id @default(cuid())
+  adultId   String
+  studentId String
+  createdAt DateTime @default(now())
+
+  adult   User @relation("GuideAdult", fields: [adultId], references: [id], onDelete: Cascade)
+  student User @relation("GuideStudent", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([adultId, studentId])
+  @@index([studentId])
+}
+
+/// Perfil sensorial do aluno: salvo no back-end, aplicado antes do primeiro paint.
+/// Nunca trocado automaticamente (princípio do design system).
+model SensoryProfile {
+  id            String       @id @default(cuid())
+  userId        String       @unique
+  theme         SensoryTheme @default(CALMO)
+  contentMode   ContentMode  @default(TEXTUAL)
+  fontFamily    FontFamily   @default(SANS)
+  reducedMotion Boolean      @default(true)
+  soundEnabled  Boolean      @default(false)
+  /// Mostra "Ouvir" (áudio sob demanda) ao lado das instruções.
+  audioPrompts  Boolean      @default(true)
+  updatedAt     DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ───────────────────────── Atividades ─────────────────────────
+
+model Activity {
+  id          String         @id @default(cuid())
+  module      ActivityModule
+  difficulty  Difficulty     @default(INICIAL)
+  title       String
+  /// Instrução curta (um verbo por instrução).
+  instruction String
+  /// Conteúdo específico do módulo, validado por Zod na API (alvos, letras, números, etc.).
+  content     Json
+  /// Texto alternativo/pictograma por item, para o modo PECS.
+  pictograms  Json?
+  published   Boolean        @default(false)
+  authorId    String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  author      User         @relation("ActivityAuthor", fields: [authorId], references: [id])
+  assignments Assignment[]
+  sessions    ActivitySession[]
+
+  @@index([module, difficulty])
+  @@index([authorId])
+}
+
+model Assignment {
+  id         String   @id @default(cuid())
+  activityId String
+  studentId  String
+  assignedBy String
+  createdAt  DateTime @default(now())
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  student  User     @relation("AssignmentStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  assigner User     @relation("AssignmentAssigner", fields: [assignedBy], references: [id])
+
+  @@unique([activityId, studentId])
+  @@index([studentId])
+}
+
+// ───────────────────────── Telemetria ─────────────────────────
+// Não existe "erro" para a criança: o campo é `redirects` (redirecionamentos gentis).
+
+model ActivitySession {
+  id           String        @id @default(cuid())
+  studentId    String
+  activityId   String
+  status       SessionStatus @default(IN_PROGRESS)
+  startedAt    DateTime      @default(now())
+  finishedAt   DateTime?
+  /// Tempo ativo em ms (descontadas pausas), calculado no servidor ao finalizar.
+  durationMs   Int?
+  totalAttempts Int          @default(0)
+  correctCount  Int          @default(0)
+  /// Tentativas redirecionadas (o "erro" interno, nunca exibido à criança).
+  redirects     Int          @default(0)
+  /// Maior nível de ajuda usado na sessão.
+  maxHelpLevel  HelpLevel    @default(NONE)
+  /// Snapshot do tema/modo usado (para análise sem cruzar com perfil mutável).
+  themeUsed     SensoryTheme?
+  contentModeUsed ContentMode?
+
+  student  User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  activity Activity  @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  attempts Attempt[]
+
+  @@index([studentId, startedAt])
+  @@index([activityId])
+  @@index([status])
+}
+
+model Attempt {
+  id         String    @id @default(cuid())
+  sessionId  String
+  /// Identificador do item dentro da atividade (ex.: "target-escola").
+  itemKey    String
+  correct    Boolean
+  helpLevel  HelpLevel @default(NONE)
+  /// Tempo desde a apresentação do item até a tentativa.
+  elapsedMs  Int
+  /// Ordem da tentativa dentro do item (1ª, 2ª...).
+  attemptNo  Int       @default(1)
+  createdAt  DateTime  @default(now())
+
+  session ActivitySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([sessionId, itemKey])
+}
+
+// ───────────────────────── LGPD ─────────────────────────
+
+/// Consentimento do responsável legal para tratamento de dados do aluno (LGPD art. 14).
+model ConsentRecord {
+  id         String        @id @default(cuid())
+  studentId  String
+  grantedBy  String        // adulto (TEACHER/THERAPIST) que registrou o consentimento
+  status     ConsentStatus @default(GRANTED)
+  /// Versão do termo aceito.
+  termsVersion String
+  createdAt  DateTime      @default(now())
+  revokedAt  DateTime?
+
+  student User @relation("ConsentStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  grantor User @relation("ConsentGrantor", fields: [grantedBy], references: [id])
+
+  @@index([studentId])
+}
+
+/// Trilha de auditoria de acessos a dados de alunos (sem conteúdo sensível no `meta`).
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String   // ex.: "student.read", "report.export"
+  targetId  String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([createdAt])
+}

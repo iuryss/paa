@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: tea-platform-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tea}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tea_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-tea_platform}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - tea_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tea} -d ${POSTGRES_DB:-tea_platform}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  tea_pgdata:

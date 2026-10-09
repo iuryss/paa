@@ -1,0 +1,57 @@
+# Produção em um único host (VPS, on-premises). Uso:
+#   cp .env.production.example .env.production   # e preencha
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?defina POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?defina POSTGRES_DB}
+    # Sem "ports": o banco só é alcançável pela rede interna do compose.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      target: migrator
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?defina AUTH_SECRET}
+      AUTH_URL: ${AUTH_URL:?defina AUTH_URL}
+      AUTH_TRUST_HOST: "true" # atrás de proxy reverso (Caddy/Nginx/Traefik)
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-resend}
+      RESEND_API_KEY: ${RESEND_API_KEY:?defina RESEND_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM:?defina EMAIL_FROM}
+      LEGAL_CONTROLLER_NAME: ${LEGAL_CONTROLLER_NAME:-}
+      LEGAL_DPO_EMAIL: ${LEGAL_DPO_EMAIL:-}
+      LEGAL_REVIEWED: ${LEGAL_REVIEWED:-false}
+    ports:
+      - "127.0.0.1:${APP_PORT:-3000}:3000" # exponha ao público só pelo proxy HTTPS
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

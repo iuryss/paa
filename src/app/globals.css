@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-ui: var(--font-nunito);
+  }
+
+  /* Preferência de fonte do perfil sensorial (data-font no <html>). */
+  [data-font="leitura"] {
+    --font-ui: var(--font-leitura);
+  }
+
+  body {
+    @apply bg-page font-sans text-body text-ink antialiased;
+  }
+
+  /* Anel de foco visível em todo elemento focável (nunca outline-none sem substituto). */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    @apply outline-none ring-4 ring-focus-ring ring-offset-[3px] ring-offset-page;
+  }
+
+  h1 {
+    @apply max-w-[28ch] text-title text-ink;
+  }
+}
+
+/* Baixo estímulo: sem animações nem transições. Vale pelo perfil (data-motion) e pelo sistema operacional. */
+[data-motion="reduce"] *,
+[data-motion="reduce"] *::before,
+[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+[data-motion="reduce"] button:active,
+[data-motion="reduce"] a:active {
+  transform: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  button:active,
+  a:active {
+    transform: none !important;
+  }
+}
