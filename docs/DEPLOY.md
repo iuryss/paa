@@ -60,7 +60,16 @@ docker compose -f docker-compose.prod.yml exec -T db sh -c 'pg_dump -U "$POSTGRE
 ## B) Vercel + Postgres gerenciado
 
 1. Crie o banco (Neon, Supabase, RDS…) em região brasileira se possível e copie a connection string.
-2. Na Vercel, importe o repositório e defina as variáveis: `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `LOG_LEVEL`.
+2. Na Vercel, importe o repositório e defina as variáveis (as `POSTGRES_*` do `.env.production.example` são só do Docker Compose e **não** se aplicam aqui):
+
+   | Variável | Valor |
+   |---|---|
+   | `DATABASE_URL` | conexão do banco externo (obrigatória) |
+   | `AUTH_SECRET` | segredo novo, só de produção (obrigatória) |
+   | `AUTH_URL` | `https://seu-dominio` (obrigatória: os links de e-mail são montados a partir dela) |
+   | `EMAIL_PROVIDER`, `RESEND_API_KEY`, `EMAIL_FROM` | envio de e-mail (veja a seção E-mail) |
+   | `LEGAL_CONTROLLER_NAME`, `LEGAL_DPO_EMAIL`, `LEGAL_REVIEWED` | textos de privacidade e termo |
+   | `LOG_LEVEL` | opcional |
 3. **Build Command**: `prisma migrate deploy && npm run build`.
 4. Em banco com pooler (PgBouncer), use a URL com pooler em `DATABASE_URL` e acrescente `?pgbouncer=true&connection_limit=1`. As migrações precisam de conexão direta: rode-as pelo CI ou localmente com a URL direta.
 5. Em *Settings → Deployment Protection*, mantenha preview deployments protegidos: previews não devem tocar o banco de produção (use um banco separado para previews).
