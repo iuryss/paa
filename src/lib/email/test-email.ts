@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { describeEmailFailure, type EmailFailure } from "@/lib/email/diagnose";
-import { readEmailConfig } from "@/lib/email/config";
+import { readEmailConfig, type EmailProviderName } from "@/lib/email/config";
 import { sendEmail } from "@/lib/email/send";
 import { testEmail } from "@/lib/email/templates";
 import { logger } from "@/lib/logger";
@@ -11,7 +11,7 @@ import { isAdultRole } from "@/lib/rbac";
 export const testEmailLimiter = createLimiter(3, 60 * 60 * 1000, defaultStore, "email-test");
 
 export type TestEmailResult =
-  | { ok: true; maskedTo: string; provider: "console" | "resend" }
+  | { ok: true; maskedTo: string; provider: EmailProviderName }
   | { ok: false; code: "rate_limited" | "forbidden" }
   | { ok: false; code: "send_failed"; failure: EmailFailure };
 

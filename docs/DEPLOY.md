@@ -3,6 +3,40 @@
 Dois caminhos: **container** (VPS/on-premises, controle total dos dados) ou **Vercel** + Postgres gerenciado.
 Em ambos: HTTPS obrigatório, segredos fora do repositório e migrações antes de subir a nova versão.
 
+## E-mail gratuito com Gmail (sem comprar domínio)
+
+Funciona para qualquer destinatário e não custa nada. Serve para: "esqueci minha senha" e convite de colegas.
+
+1. **Crie uma conta Gmail só para a plataforma** (ex.: `plataforma.escola@gmail.com`). Não use a sua pessoal.
+2. Nessa conta, ligue a **Verificação em duas etapas**: https://myaccount.google.com/security (pede um celular).
+3. Gere uma **senha de app**: https://myaccount.google.com/apppasswords → nome "Plataforma TEA" → *Criar*. O Google mostra um código de **16 letras** (ex.: `abcd efgh ijkl mnop`). **Copie na hora: ele não aparece de novo.** Se a página "Senhas de app" não existir, a verificação em duas etapas ainda não está ligada (ou a conta é de trabalho/escola com essa opção bloqueada).
+4. Na Vercel (*Settings → Environment Variables*), defina:
+
+   | Variável | Valor |
+   |---|---|
+   | `EMAIL_PROVIDER` | `gmail` |
+   | `GMAIL_USER` | o endereço Gmail criado |
+   | `GMAIL_APP_PASSWORD` | o código de 16 letras (com ou sem espaços; **sem aspas**) |
+   | `AUTH_URL` | `https://SEU-PROJETO.vercel.app` (o endereço gratuito da Vercel serve; sem barra no fim) |
+
+   `EMAIL_FROM` é opcional (o remetente padrão é a própria conta Gmail). As variáveis `RESEND_*` não são usadas.
+5. Faça um **novo deploy** e, em *Minha conta*, clique em **Enviar e-mail de teste para mim**. Se falhar, a tela explica o motivo.
+
+Limites e cuidados: o Gmail gratuito envia cerca de **500 e-mails por dia**, mais do que suficiente aqui. Os primeiros e-mails podem cair no **spam**: peça aos colegas para marcar "não é spam". O remetente é o próprio Gmail (as respostas chegam nele, o que é útil). Para o encarregado (DPO), `LEGAL_DPO_EMAIL` pode ser esse mesmo Gmail. Se um dia comprarem um domínio, é só trocar para `resend` (próxima seção).
+
+## (Opcional) Domínio próprio — site e e-mail com endereço da escola
+
+Um mesmo domínio serve às duas coisas, e os registros não se atrapalham (o site usa o domínio principal; o Resend usa o subdomínio `send` e a chave DKIM). Todos os registros são criados no **painel de DNS de onde o domínio foi comprado** (campos: Tipo, Nome/Host, Valor, TTL).
+
+1. **Site na Vercel.** Vercel → projeto → *Settings → Domains → Add* → `seudominio.com`. A Vercel mostra os registros certos para o seu projeto; copie exatamente. Em geral: `A` com Nome `@` apontando para o IP que ela indicar e `CNAME` com Nome `www` apontando para `cname.vercel-dns.com`. Aguarde "Valid Configuration" (o HTTPS é automático). Defina o domínio principal e deixe o `www` redirecionando.
+2. **Variável `AUTH_URL`** = `https://seudominio.com` (sem barra no fim, sem aspas) e **novo deploy**.
+3. **E-mail no Resend.** *Domains → Add Domain* → `seudominio.com` → copie os registros que ele mostrar (normalmente 1 `MX` e 2 `TXT`: SPF e DKIM) → *Verify*. Recomendado também um `TXT` `_dmarc` com `v=DMARC1; p=none;`.
+4. **Variável `EMAIL_FROM`** = `"Plataforma TEA <nao-responda@seudominio.com>"` e novo deploy. Não precisa existir caixa de e-mail para o `nao-responda`.
+5. **Caixa para o encarregado (DPO).** Os pais precisam conseguir escrever para a escola. Sem TI, use um serviço gratuito de **encaminhamento** (ex.: ImprovMX, Cloudflare Email Routing ou Zoho Mail) para `privacidade@seudominio.com` chegar no e-mail real de quem responde. Depois defina `LEGAL_DPO_EMAIL=privacidade@seudominio.com`.
+6. **Conferir** (PowerShell): `Resolve-DnsName seudominio.com` e `Resolve-DnsName resend._domainkey.seudominio.com -Type TXT`. Depois, em *Minha conta → Verificação do sistema*, tudo "ok", e **Enviar e-mail de teste para mim**.
+
+Problemas comuns: o campo *Nome* de muitos painéis já acrescenta o domínio sozinho (escreva só `send`, não `send.seudominio.com`); não crie dois SPF no mesmo nome; CNAME não pode ficar no domínio raiz (`@`), use `A`; a propagação leva de minutos a algumas horas.
+
 ## Redis (limite de tentativas de login)
 
 O bloqueio após 5 falhas (PIN do aluno, senha do professor, troca de senha, pedidos de "esqueci a senha") precisa de um armazenamento **compartilhado**. Na Vercel cada requisição pode cair numa instância diferente, e a memória é descartada, então sem Redis o PIN de 4 dígitos fica exposto a tentativa e erro.
@@ -13,9 +47,9 @@ O bloqueio após 5 falhas (PIN do aluno, senha do professor, troca de senha, ped
 
 Se o Redis cair, o login **não** fica fora do ar: o sistema usa a memória como reserva (proteção reduzida por instância), registra `rate_limit.redis_unavailable` no log e o painel mostra "atenção". Os identificadores (e-mail, código do aluno) vão ao Redis apenas como hash SHA-256.
 
-## E-mail (redefinição de senha e convites)
+## E-mail com Resend (exige domínio)
 
-A plataforma envia e-mail pelo **Resend** (`EMAIL_PROVIDER=resend`). Em produção ele é obrigatório: sem `RESEND_API_KEY` e `EMAIL_FROM` a aplicação recusa enviar.
+Alternativa ao Gmail, com remetente no domínio da escola (`EMAIL_PROVIDER=resend`). Sem `RESEND_API_KEY` e `EMAIL_FROM` a aplicação recusa enviar por ele.
 
 1. Crie a conta em resend.com e **verifique o domínio** de envio (registros DNS SPF e DKIM). Sem isso os e-mails caem no spam ou são recusados.
 2. Gere a chave de API e defina `RESEND_API_KEY` e `EMAIL_FROM` (`"Plataforma TEA <nao-responda@suaescola.com.br>"`).

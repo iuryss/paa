@@ -61,13 +61,18 @@ export async function runSystemChecks({
   // E-mail
   try {
     const config = readEmailConfig(env);
+    const maskEmail = (e: string) => `${e.slice(0, 1)}***@${e.split("@")[1] ?? ""}`;
+    const details: Record<string, string> = {
+      console: "Modo terminal: o e-mail aparece no console do servidor e nada é enviado.",
+      resend: "Resend configurado. Use “Enviar e-mail de teste” para confirmar.",
+      gmail: `Gmail configurado${config.EMAIL_PROVIDER === "gmail" ? ` (${maskEmail(config.GMAIL_USER)})` : ""}. Use “Enviar e-mail de teste” para confirmar.`,
+      smtp: `SMTP configurado${config.EMAIL_PROVIDER === "smtp" ? ` (${config.SMTP_HOST})` : ""}. Use “Enviar e-mail de teste” para confirmar.`,
+    };
     add(
       "email",
       "Envio de e-mail",
-      config.EMAIL_PROVIDER === "resend" || !production,
-      config.EMAIL_PROVIDER === "resend"
-        ? "Resend configurado. Use “Enviar e-mail de teste” para confirmar."
-        : "Modo terminal: o e-mail aparece no console do servidor e nada é enviado.",
+      config.EMAIL_PROVIDER !== "console" || !production,
+      details[config.EMAIL_PROVIDER] ?? "",
       "Configuração de e-mail inválida.",
     );
   } catch (error) {

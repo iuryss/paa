@@ -49,6 +49,29 @@ describe("runSystemChecks", () => {
     expect(thrown["db"]?.status).toBe("warn");
   });
 
+  it("Gmail em produção: ok, mostra o endereço mascarado e NUNCA a senha de app", async () => {
+    const env = { NODE_ENV: "production", AUTH_URL: "https://x.vercel.app", AUTH_SECRET: "x".repeat(40), GMAIL_USER: "plataforma.paa@gmail.com", GMAIL_APP_PASSWORD: "abcd efgh ijkl mnop" };
+    const checks = await runSystemChecks({ env, ...healthy });
+    const email = byId(checks)["email"]!;
+    expect(email.status).toBe("ok");
+    expect(email.detail).toContain("Gmail configurado (p***@gmail.com)");
+    const text = JSON.stringify(checks);
+    expect(text).not.toContain("abcd");
+    expect(text).not.toContain("plataforma.paa");
+  });
+
+  it("Gmail com a senha de app curta: aponta o nome da variável", async () => {
+    const env = { NODE_ENV: "production", EMAIL_PROVIDER: "gmail", GMAIL_USER: "a@gmail.com", GMAIL_APP_PASSWORD: "curta" };
+    const email = byId(await runSystemChecks({ env, ...healthy }))["email"]!;
+    expect(email.status).toBe("warn");
+    expect(email.detail).toContain("GMAIL_APP_PASSWORD");
+  });
+
+  it("SMTP genérico mostra o servidor", async () => {
+    const env = { NODE_ENV: "production", SMTP_HOST: "smtp.escola.com", SMTP_PORT: "587", SMTP_USER: "u", SMTP_PASS: "p", EMAIL_FROM: "Plataforma <a@escola.com>" };
+    expect(byId(await runSystemChecks({ env, ...healthy }))["email"]?.detail).toContain("SMTP configurado (smtp.escola.com)");
+  });
+
   it("Resend em produção sem chave: mostra quais variáveis faltam", async () => {
     const { RESEND_API_KEY: _k, ...env } = prodEnv;
     void _k;

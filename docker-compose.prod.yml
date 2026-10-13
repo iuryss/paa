@@ -41,9 +41,16 @@ services:
       AUTH_URL: ${AUTH_URL:?defina AUTH_URL}
       AUTH_TRUST_HOST: "true" # atrás de proxy reverso (Caddy/Nginx/Traefik)
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-resend}
-      RESEND_API_KEY: ${RESEND_API_KEY:?defina RESEND_API_KEY}
-      EMAIL_FROM: ${EMAIL_FROM:?defina EMAIL_FROM}
+      # Provedor de e-mail: gmail | smtp | resend (vazio = detecta pelas variáveis presentes).
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      GMAIL_USER: ${GMAIL_USER:-}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
       LEGAL_CONTROLLER_NAME: ${LEGAL_CONTROLLER_NAME:-}
       LEGAL_DPO_EMAIL: ${LEGAL_DPO_EMAIL:-}
       LEGAL_REVIEWED: ${LEGAL_REVIEWED:-false}
