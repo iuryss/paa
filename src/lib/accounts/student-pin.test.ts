@@ -15,13 +15,13 @@ jest.mock("@/lib/db", () => ({
   },
 }));
 
-beforeEach(() => {
+beforeEach(async () => {
   Object.values(m).forEach((fn) => fn.mockReset());
   m.guides.mockResolvedValue(true);
   m.find.mockResolvedValue({ studentCode: "DEMO-2345", displayName: "Sol" });
   m.update.mockResolvedValue({});
   m.audit.mockResolvedValue({});
-  loginLimiter.reset("student:DEMO-2345");
+  await loginLimiter.reset("student:DEMO-2345");
 });
 
 describe("resetStudentPin", () => {
@@ -46,10 +46,10 @@ describe("resetStudentPin", () => {
   });
 
   it("limpa o bloqueio de tentativas da criança", async () => {
-    for (let i = 0; i < 5; i++) loginLimiter.fail("student:DEMO-2345");
-    expect(loginLimiter.isBlocked("student:DEMO-2345")).toBe(true);
+    for (let i = 0; i < 5; i++) await loginLimiter.fail("student:DEMO-2345");
+    expect(await loginLimiter.isBlocked("student:DEMO-2345")).toBe(true);
     await resetStudentPin("prof1", "stu1");
-    expect(loginLimiter.isBlocked("student:DEMO-2345")).toBe(false);
+    expect(await loginLimiter.isBlocked("student:DEMO-2345")).toBe(false);
   });
 
   it("sem vínculo com o aluno: not_found e nada é alterado (LGPD)", async () => {

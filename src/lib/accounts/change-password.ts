@@ -14,7 +14,7 @@ export async function changePassword(
   newPassword: string,
 ): Promise<ChangePasswordResult> {
   const key = `pwd:${userId}`;
-  if (loginLimiter.isBlocked(key)) return { ok: false, code: "rate_limited" };
+  if (await loginLimiter.isBlocked(key)) return { ok: false, code: "rate_limited" };
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -25,11 +25,11 @@ export async function changePassword(
   }
 
   if (!(await verifySecret(currentPassword, user.passwordHash))) {
-    loginLimiter.fail(key);
+    await loginLimiter.fail(key);
     return { ok: false, code: "wrong_current" };
   }
 
-  loginLimiter.reset(key);
+  await loginLimiter.reset(key);
   await prisma.user.update({
     where: { id: userId },
     data: { passwordHash: await hashSecret(newPassword) },

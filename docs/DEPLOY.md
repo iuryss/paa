@@ -3,6 +3,16 @@
 Dois caminhos: **container** (VPS/on-premises, controle total dos dados) ou **Vercel** + Postgres gerenciado.
 Em ambos: HTTPS obrigatório, segredos fora do repositório e migrações antes de subir a nova versão.
 
+## Redis (limite de tentativas de login)
+
+O bloqueio após 5 falhas (PIN do aluno, senha do professor, troca de senha, pedidos de "esqueci a senha") precisa de um armazenamento **compartilhado**. Na Vercel cada requisição pode cair numa instância diferente, e a memória é descartada, então sem Redis o PIN de 4 dígitos fica exposto a tentativa e erro.
+
+1. Na Vercel: **Storage → Create → Upstash (Redis)** e conecte ao projeto. A integração injeta `KV_REST_API_URL` e `KV_REST_API_TOKEN` (ou `UPSTASH_REDIS_REST_URL`/`_TOKEN`): o sistema aceita as duas formas.
+2. Faça um novo deploy (variáveis novas só valem em deploys novos).
+3. Confirme em **Minha conta → Verificação do sistema**: "Limite de tentativas de login: ok, Redis (compartilhado entre todas as instâncias)".
+
+Se o Redis cair, o login **não** fica fora do ar: o sistema usa a memória como reserva (proteção reduzida por instância), registra `rate_limit.redis_unavailable` no log e o painel mostra "atenção". Os identificadores (e-mail, código do aluno) vão ao Redis apenas como hash SHA-256.
+
 ## E-mail (redefinição de senha e convites)
 
 A plataforma envia e-mail pelo **Resend** (`EMAIL_PROVIDER=resend`). Em produção ele é obrigatório: sem `RESEND_API_KEY` e `EMAIL_FROM` a aplicação recusa enviar.
@@ -10,7 +20,7 @@ A plataforma envia e-mail pelo **Resend** (`EMAIL_PROVIDER=resend`). Em produç�
 1. Crie a conta em resend.com e **verifique o domínio** de envio (registros DNS SPF e DKIM). Sem isso os e-mails caem no spam ou são recusados.
 2. Gere a chave de API e defina `RESEND_API_KEY` e `EMAIL_FROM` (`"Plataforma TEA <nao-responda@suaescola.com.br>"`).
 3. Defina `AUTH_URL` com o endereço público: os links dos e-mails são montados a partir dele (nunca do cabeçalho Host).
-4. Teste: peça "Esqueci minha senha" com o seu e-mail e confira a caixa de entrada **e** o spam.
+4. Teste: em **Minha conta**, clique em **Enviar e-mail de teste para mim** e confira a caixa de entrada **e** o spam. Se falhar, a tela explica a causa (chave inválida, domínio não verificado, formato do remetente...). O log do servidor também registra o código (`email_test.failed`, `password_reset.email_failed`).
 
 Em desenvolvimento use `EMAIL_PROVIDER=console`: o e-mail aparece no terminal do servidor e nada é enviado.
 
@@ -76,6 +86,19 @@ docker compose -f docker-compose.prod.yml exec -T db sh -c 'pg_dump -U "$POSTGRE
 
 ## Primeiro usuário (professor) em produção
 
+**Use o script, que evita o erro de aspas do PowerShell** (`$` na senha vira outra senha e o login falha com `wrong_password`). Ele gera o SQL pronto e confere que o hash casa com a senha:
+
+```powershell
+$env:NEW_PASSWORD='SuaSenhaForteAqui'
+node scripts/make-user-sql.mjs insert seu-email@dominio.com "Seu Nome" TEACHER   # criar
+node scripts/make-user-sql.mjs update seu-email@dominio.com                      # trocar a senha
+Remove-Item Env:NEW_PASSWORD
+```
+
+Cole o SQL impresso no SQL Editor do banco. Se o login falhar, o log do servidor mostra o motivo (`auth.failed` com `reason`): `user_not_found`, `wrong_password`, `inactive` ou `wrong_role`.
+
+O método manual abaixo continua válido, mas é mais sujeito a erro:
+
 Sem seed. Gere o hash e insira uma única vez:
 
 ```bash
@@ -93,7 +116,6 @@ Depois, troque a senha e cadastre os alunos pelo painel.
 
 | Item | Situação | Ação recomendada |
 |---|---|---|
-| Bloqueio de tentativas de login | Em memória, por instância | Com mais de uma instância (ou Vercel), trocar por Redis/Upstash (`src/lib/rate-limit.ts`) |
 | CSP (Content-Security-Policy) | Não configurada | Adicionar com *nonce* depois de testar; os demais cabeçalhos já estão em `next.config.ts` |
 | Dependências | `npm audit` aponta itens altos em ferramentas de build (Tailwind 3, Prisma CLI) e `next` 15 | Planejar upgrade para Next 16 / Tailwind 4 / Prisma 7 em branch própria |
 | Retenção de dados | Não há expurgo automático | Definir prazo com a escola e agendar limpeza de `ActivitySession`/`Attempt` antigas |

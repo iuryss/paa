@@ -20,7 +20,10 @@ const m = {
   send: jest.fn(),
 };
 
-jest.mock("@/lib/email/send", () => ({ sendEmail: (...a: unknown[]) => m.send(...a) }));
+jest.mock("@/lib/email/send", () => ({
+  ...jest.requireActual("@/lib/email/send"),
+  sendEmail: (...a: unknown[]) => m.send(...a),
+}));
 jest.mock("@/lib/db", () => {
   const client = {
     user: {
@@ -44,14 +47,14 @@ const BASE = "https://app.exemplo.com/";
 const EMAIL = "ana@escola.com";
 const user = { id: "u1", displayName: "Ana", role: "TEACHER", active: true };
 
-beforeEach(() => {
+beforeEach(async () => {
   Object.values(m).forEach((fn) => fn.mockReset());
   m.prDeleteMany.mockResolvedValue({ count: 0 });
   m.prCreate.mockResolvedValue({});
   m.audit.mockResolvedValue({});
   m.send.mockResolvedValue(undefined);
-  resetRequestLimiter.reset(`reset:${EMAIL}`);
-  loginLimiter.reset(`adult:${EMAIL}`);
+  await resetRequestLimiter.reset(`reset:${EMAIL}`);
+  await loginLimiter.reset(`adult:${EMAIL}`);
 });
 
 describe("requestPasswordReset", () => {
@@ -101,6 +104,18 @@ describe("requestPasswordReset", () => {
     m.send.mockRejectedValue(new Error("provedor fora do ar"));
     await expect(requestPasswordReset(EMAIL, BASE, NOW)).resolves.toBeUndefined();
   });
+
+  it("registra a CAUSA da falha de envio no log, sem o endereço nem o link", async () => {
+    const { EmailError } = jest.requireActual("@/lib/email/send");
+    const { logger } = jest.requireActual("@/lib/logger");
+    const spy = jest.spyOn(logger, "error").mockImplementation(() => {});
+    m.userFind.mockResolvedValue(user);
+    m.send.mockRejectedValue(new EmailError("x", { status: 403 }));
+    await requestPasswordReset(EMAIL, BASE, NOW);
+    expect(spy).toHaveBeenCalledWith("password_reset.email_failed", { code: "forbidden", status: 403 });
+    expect(JSON.stringify(spy.mock.calls)).not.toContain(EMAIL);
+    spy.mockRestore();
+  });
 });
 
 describe("isResetTokenValid", () => {
@@ -135,8 +150,8 @@ describe("resetPassword", () => {
   });
 
   it("troca a senha (hash), consome o link, cancela os outros e libera o login bloqueado", async () => {
-    for (let i = 0; i < 5; i++) loginLimiter.fail(`adult:${EMAIL}`);
-    expect(loginLimiter.isBlocked(`adult:${EMAIL}`)).toBe(true);
+    for (let i = 0; i < 5; i++) await loginLimiter.fail(`adult:${EMAIL}`);
+    expect(await loginLimiter.isBlocked(`adult:${EMAIL}`)).toBe(true);
 
     await expect(resetPassword(token, "cavalo-azul-72", NOW)).resolves.toEqual({ ok: true });
 
@@ -146,7 +161,7 @@ describe("resetPassword", () => {
     expect(m.prUpdateMany).toHaveBeenCalledWith({ where: { id: "r1", usedAt: null }, data: { usedAt: NOW } });
     expect(m.prDeleteMany).toHaveBeenCalledWith({ where: { userId: "u1", usedAt: null } });
     expect(m.audit).toHaveBeenCalledWith({ data: { actorId: "u1", action: "auth.password.reset" } });
-    expect(loginLimiter.isBlocked(`adult:${EMAIL}`)).toBe(false);
+    expect(await loginLimiter.isBlocked(`adult:${EMAIL}`)).toBe(false);
   });
 
   it.each([

@@ -51,3 +51,17 @@ export function invitationEmail(args: {
     html: layout("Você foi convidado(a)", [intro, validity], args.link, "Criar minha conta", footer),
   };
 }
+
+export function testEmail(args: { to: string; name: string }): EmailMessage {
+  const subject = "Teste de e-mail - Plataforma TEA";
+  const body = `Olá, ${args.name}. Se você está lendo isto, o envio de e-mails da Plataforma TEA está funcionando.`;
+  return {
+    to: args.to,
+    subject,
+    text: `${body}
+
+Nenhuma ação é necessária.
+`,
+    html: `<!doctype html><html lang="pt-BR"><body style="margin:0;padding:24px;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#334155"><div style="max-width:520px;margin:0 auto;background:#f8fafc;border:2px solid #64748b;border-radius:20px;padding:32px"><h1 style="margin:0 0 16px;font-size:22px">Teste de e-mail</h1><p style="margin:0 0 16px">${escapeHtml(body)}</p><p style="margin:0;font-size:14px;color:#475569">Nenhuma ação é necessária.</p></div></body></html>`,
+  };
+}

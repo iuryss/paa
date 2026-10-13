@@ -9,7 +9,10 @@ import {
 import { generateToken } from "./tokens";
 
 const send = jest.fn();
-jest.mock("@/lib/email/send", () => ({ sendEmail: (...a: unknown[]) => send(...a) }));
+jest.mock("@/lib/email/send", () => ({
+  ...jest.requireActual("@/lib/email/send"),
+  sendEmail: (...a: unknown[]) => send(...a),
+}));
 
 const m = {
   userFind: jest.fn(),

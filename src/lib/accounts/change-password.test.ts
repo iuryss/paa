@@ -20,12 +20,12 @@ beforeAll(async () => {
   user = { passwordHash: await hashSecret("senha-atual-123"), role: "TEACHER", active: true };
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   Object.values(m).forEach((fn) => fn.mockReset());
   m.update.mockResolvedValue({});
   m.audit.mockResolvedValue({});
   m.find.mockResolvedValue(user);
-  loginLimiter.reset("pwd:u1");
+  await loginLimiter.reset("pwd:u1");
 });
 
 describe("changePassword", () => {

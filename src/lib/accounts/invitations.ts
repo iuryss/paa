@@ -1,5 +1,6 @@
 import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { describeEmailFailure } from "@/lib/email/diagnose";
 import { sendEmail } from "@/lib/email/send";
 import { invitationEmail } from "@/lib/email/templates";
 import { logger } from "@/lib/logger";
@@ -64,8 +65,9 @@ export async function emailInvitation(args: {
       }),
     );
     return true;
-  } catch {
-    logger.error("invitation.email_failed");
+  } catch (error) {
+    const { code, status } = describeEmailFailure(error);
+    logger.error("invitation.email_failed", { code, status });
     return false;
   }
 }

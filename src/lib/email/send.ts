@@ -8,9 +8,16 @@ export interface EmailMessage {
 }
 
 export class EmailError extends Error {
-  constructor(message: string) {
+  /** Status HTTP devolvido pelo provedor (ausente em falha de rede). */
+  readonly status?: number;
+  /** Nome do erro segundo o provedor (ex.: "validation_error"). Nunca contém a chave nem o corpo do e-mail. */
+  readonly providerName?: string;
+
+  constructor(message: string, details: { status?: number; providerName?: string } = {}) {
     super(message);
     this.name = "EmailError";
+    this.status = details.status;
+    this.providerName = details.providerName;
   }
 }
 
@@ -53,5 +60,18 @@ export async function sendEmail(
   } catch {
     throw new EmailError("Falha de rede ao enviar e-mail");
   }
-  if (!response.ok) throw new EmailError(`O provedor de e-mail respondeu ${response.status}`);
+
+  if (!response.ok) {
+    // O Resend responde {"name": "...", "message": "...", "statusCode": N}. Guardamos só o nome do erro.
+    let body: { name?: unknown } | null = null;
+    try {
+      body = (await response.json()) as { name?: unknown } | null;
+    } catch {
+      body = null; // corpo vazio ou não-JSON: seguimos só com o status
+    }
+    throw new EmailError(`O provedor de e-mail respondeu ${response.status}`, {
+      status: response.status,
+      providerName: typeof body?.name === "string" ? body.name.slice(0, 60) : undefined,
+    });
+  }
 }

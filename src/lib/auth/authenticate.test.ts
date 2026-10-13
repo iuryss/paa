@@ -34,10 +34,10 @@ beforeAll(async () => {
   };
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   mockFindUnique.mockReset();
   mockAuditCreate.mockReset().mockResolvedValue({});
-  ["adult:prof@escola.com", "student:DEMO-2345"].forEach((k) => loginLimiter.reset(k));
+  await Promise.all(["adult:prof@escola.com", "student:DEMO-2345"].map((k) => loginLimiter.reset(k)));
 });
 
 describe("authenticateAdult", () => {

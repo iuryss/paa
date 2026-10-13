@@ -1,0 +1,89 @@
+import { runSystemChecks } from "./system-checks";
+
+const prodEnv = {
+  NODE_ENV: "production",
+  AUTH_URL: "https://app.escola.com.br",
+  AUTH_SECRET: "x".repeat(40),
+  EMAIL_PROVIDER: "resend",
+  RESEND_API_KEY: "re_1234567890abcdef",
+  EMAIL_FROM: "Plataforma <nao-responda@escola.com.br>",
+  LEGAL_CONTROLLER_NAME: "Escola Girassol",
+  LEGAL_DPO_EMAIL: "dpo@escola.com.br",
+  LEGAL_REVIEWED: "true",
+};
+
+const healthy = { checkDb: async () => true, pingRedis: async () => true as boolean | null, backend: "redis" as const };
+
+const byId = (checks: Awaited<ReturnType<typeof runSystemChecks>>) => Object.fromEntries(checks.map((c) => [c.id, c]));
+
+describe("runSystemChecks", () => {
+  it("produção totalmente configurada: tudo ok", async () => {
+    const checks = await runSystemChecks({ env: prodEnv, ...healthy });
+    expect(checks.every((c) => c.status === "ok")).toBe(true);
+    expect(byId(checks)["auth-url"]?.detail).toBe("https://app.escola.com.br");
+  });
+
+  it("produção SEM Redis: avisa que o limite de login não protege entre instâncias", async () => {
+    const c = byId(await runSystemChecks({ env: prodEnv, ...healthy, backend: "memory" }));
+    expect(c["rate-limit"]).toMatchObject({ status: "warn" });
+    expect(c["rate-limit"]?.detail).toMatch(/Upstash/);
+  });
+
+  it("em desenvolvimento a memória é aceitável", async () => {
+    const c = byId(await runSystemChecks({ env: { NODE_ENV: "development", AUTH_SECRET: "x".repeat(40), AUTH_URL: "http://localhost:3000" }, ...healthy, backend: "memory" }));
+    expect(c["rate-limit"]?.status).toBe("ok");
+    expect(c["email"]?.status).toBe("ok"); // modo terminal
+    expect(c["email"]?.detail).toMatch(/nada é enviado/);
+  });
+
+  it("Redis configurado mas fora do ar", async () => {
+    const c = byId(await runSystemChecks({ env: prodEnv, ...healthy, pingRedis: async () => false }));
+    expect(c["rate-limit"]).toMatchObject({ status: "warn" });
+    expect(c["rate-limit"]?.detail).toMatch(/memória como reserva/);
+  });
+
+  it("banco sem conexão", async () => {
+    const c = byId(await runSystemChecks({ env: prodEnv, ...healthy, checkDb: async () => false }));
+    expect(c["db"]?.status).toBe("warn");
+    const thrown = byId(await runSystemChecks({ env: prodEnv, ...healthy, checkDb: async () => { throw new Error("x"); } }));
+    expect(thrown["db"]?.status).toBe("warn");
+  });
+
+  it("Resend em produção sem chave: mostra quais variáveis faltam", async () => {
+    const { RESEND_API_KEY: _k, ...env } = prodEnv;
+    void _k;
+    const c = byId(await runSystemChecks({ env, ...healthy }));
+    expect(c["email"]).toMatchObject({ status: "warn" });
+    expect(c["email"]?.detail).toContain("RESEND_API_KEY");
+  });
+
+  it.each([
+    [undefined, /não definida/],
+    ["meu-app.vercel.app", /inválida/],
+    ['"https://meu-app.vercel.app"', /inválida/],
+    ["http://meu-app.com.br", /https/],
+  ])("AUTH_URL %p é sinalizada", async (authUrl, pattern) => {
+    const c = byId(await runSystemChecks({ env: { ...prodEnv, AUTH_URL: authUrl }, ...healthy }));
+    expect(c["auth-url"]?.status).toBe("warn");
+    expect(c["auth-url"]?.detail).toMatch(pattern);
+  });
+
+  it("AUTH_SECRET curto ou ausente", async () => {
+    const c = byId(await runSystemChecks({ env: { ...prodEnv, AUTH_SECRET: "curto" }, ...healthy }));
+    expect(c["auth-secret"]?.status).toBe("warn");
+  });
+
+  it("textos legais: avisa o que falta", async () => {
+    const c = byId(await runSystemChecks({ env: { ...prodEnv, LEGAL_REVIEWED: "false", LEGAL_DPO_EMAIL: "" }, ...healthy }));
+    expect(c["legal"]?.status).toBe("warn");
+    expect(c["legal"]?.detail).toMatch(/versão de trabalho/);
+    expect(c["legal"]?.detail).toMatch(/e-mail do encarregado/);
+  });
+
+  it("NUNCA expõe valores de segredos", async () => {
+    const text = JSON.stringify(await runSystemChecks({ env: prodEnv, ...healthy }));
+    expect(text).not.toContain(prodEnv.AUTH_SECRET);
+    expect(text).not.toContain(prodEnv.RESEND_API_KEY);
+    expect(text).not.toContain("dpo@escola.com.br");
+  });
+});

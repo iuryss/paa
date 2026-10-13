@@ -23,11 +23,11 @@ beforeAll(async () => {
   student = { id: "s1", role: "STUDENT", displayName: "Sol", studentCode: "DEMO-2345", active: true, pinHash: await hashSecret("1234") };
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   mockFind.mockReset();
   mockInfo.mockReset();
-  loginLimiter.reset("adult:prof@escola.com");
-  loginLimiter.reset("student:DEMO-2345");
+  await loginLimiter.reset("adult:prof@escola.com");
+  await loginLimiter.reset("student:DEMO-2345");
 });
 
 const creds = { email: "prof@escola.com", password: "Senha#Forte1" };

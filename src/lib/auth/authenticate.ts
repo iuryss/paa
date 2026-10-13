@@ -27,7 +27,7 @@ export async function authenticateAdult(raw: unknown): Promise<AuthenticatedUser
   const { email, password } = parsed.data;
 
   const key = `adult:${email}`;
-  if (loginLimiter.isBlocked(key)) {
+  if (await loginLimiter.isBlocked(key)) {
     logger.warn("auth.blocked", { scope: "adult" });
     return null;
   }
@@ -37,7 +37,7 @@ export async function authenticateAdult(raw: unknown): Promise<AuthenticatedUser
   const valid = await verifySecret(password, user?.passwordHash ?? (await getDummyHash()));
 
   if (!user || !valid || !user.active || !isAdultRole(user.role)) {
-    loginLimiter.fail(key);
+    await loginLimiter.fail(key);
     // A razão vai SÓ para o log do servidor (nunca para a tela, que continua neutra): ajuda a diagnosticar
     // "não consigo entrar" sem revelar a ninguém se um e-mail existe.
     const reason = !user ? "user_not_found" : !valid ? "wrong_password" : !user.active ? "inactive" : "wrong_role";
@@ -45,7 +45,7 @@ export async function authenticateAdult(raw: unknown): Promise<AuthenticatedUser
     return null;
   }
 
-  loginLimiter.reset(key);
+  await loginLimiter.reset(key);
   await audit(user.id, "auth.login");
   return { id: user.id, name: user.displayName, role: user.role };
 }
@@ -57,7 +57,7 @@ export async function authenticateStudent(raw: unknown): Promise<AuthenticatedUs
   const { studentCode, pin } = parsed.data;
 
   const key = `student:${studentCode}`;
-  if (loginLimiter.isBlocked(key)) {
+  if (await loginLimiter.isBlocked(key)) {
     logger.warn("auth.blocked", { scope: "student" });
     return null;
   }
@@ -66,13 +66,13 @@ export async function authenticateStudent(raw: unknown): Promise<AuthenticatedUs
   const valid = await verifySecret(pin, user?.pinHash ?? (await getDummyHash()));
 
   if (!user || !valid || !user.active || user.role !== "STUDENT") {
-    loginLimiter.fail(key);
+    await loginLimiter.fail(key);
     const reason = !user ? "user_not_found" : !valid ? "wrong_pin" : !user.active ? "inactive" : "wrong_role";
     logger.info("auth.failed", { scope: "student", reason });
     return null;
   }
 
-  loginLimiter.reset(key);
+  await loginLimiter.reset(key);
   await audit(user.id, "auth.login");
   return { id: user.id, name: user.displayName, role: user.role };
 }

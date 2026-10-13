@@ -24,7 +24,7 @@ export async function resetStudentPin(adultId: string, studentId: string): Promi
 
   const pin = generatePin();
   await prisma.user.update({ where: { id: studentId }, data: { pinHash: await hashSecret(pin) } });
-  loginLimiter.reset(`student:${student.studentCode}`);
+  await loginLimiter.reset(`student:${student.studentCode}`);
   await prisma.auditLog.create({
     data: { actorId: adultId, action: "student.pin.reset", targetId: studentId },
   });

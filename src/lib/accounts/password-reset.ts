@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/db";
 import { passwordResetEmail } from "@/lib/email/templates";
+import { describeEmailFailure } from "@/lib/email/diagnose";
 import { sendEmail } from "@/lib/email/send";
 import { logger } from "@/lib/logger";
 import { hashSecret } from "@/lib/password";
-import { createLimiter, loginLimiter } from "@/lib/rate-limit";
+import { createLimiter, defaultStore, loginLimiter } from "@/lib/rate-limit";
 import { isAdultRole } from "@/lib/rbac";
 import { generateToken, hashToken, TOKEN_REGEX } from "./tokens";
 
@@ -11,7 +12,7 @@ export const RESET_TTL_MS = 60 * 60 * 1000;
 const RESET_MINUTES = RESET_TTL_MS / 60_000;
 
 /** Máx. 3 pedidos por e-mail por hora: impede usar o sistema para lotar a caixa de alguém. */
-export const resetRequestLimiter = createLimiter(3, 60 * 60 * 1000);
+export const resetRequestLimiter = createLimiter(3, 60 * 60 * 1000, defaultStore, "reset");
 
 /**
  * Pede o link de redefinição. NÃO informa se o e-mail existe: sem resposta diferente para quem chama.
@@ -24,11 +25,11 @@ export async function requestPasswordReset(
   now: Date = new Date(),
 ): Promise<void> {
   const key = `reset:${email}`;
-  if (resetRequestLimiter.isBlocked(key)) {
+  if (await resetRequestLimiter.isBlocked(key)) {
     logger.warn("password_reset.rate_limited");
     return;
   }
-  resetRequestLimiter.fail(key); // cada pedido conta
+  await resetRequestLimiter.fail(key); // cada pedido conta
 
   const user = await prisma.user.findUnique({
     where: { email },
@@ -52,8 +53,9 @@ export async function requestPasswordReset(
         minutes: RESET_MINUTES,
       }),
     );
-  } catch {
-    logger.error("password_reset.email_failed");
+  } catch (error) {
+    const { code, status } = describeEmailFailure(error);
+    logger.error("password_reset.email_failed", { code, status });
   }
 }
 
@@ -105,6 +107,6 @@ export async function resetPassword(
 
   if (result === null) return { ok: false, code: "invalid" };
   // Quem esqueceu a senha pode estar bloqueado por tentativas: libera o login.
-  if (result) loginLimiter.reset(`adult:${result}`);
+  if (result) await loginLimiter.reset(`adult:${result}`);
   return { ok: true };
 }
