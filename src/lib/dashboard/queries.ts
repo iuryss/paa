@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { closeStaleSessions } from "@/lib/telemetry";
 import {
   summarizeByModule,
   summarizeSession,
@@ -80,6 +81,8 @@ export interface StudentCard {
   id: string;
   displayName: string;
   summary: StudentSummary;
+  /** Sessões que a criança começou e não terminou, no período. */
+  interrupted: number;
 }
 
 /** Visão geral: alunos do adulto com o resumo do período. Só apelido, nunca PII. */
@@ -93,13 +96,59 @@ export async function getStudentsOverview(
     orderBy: { createdAt: "asc" },
     select: { student: { select: { id: true, displayName: true } } },
   });
+  const ids = links.map((l) => l.student.id);
+  const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+
+  // Fecha as sessões abandonadas antes de contar (o cron diário cobre quem ninguém abriu).
+  await closeStaleSessions({ now, studentIds: ids });
+  const interrupted = ids.length
+    ? await prisma.activitySession.groupBy({
+        by: ["studentId"],
+        where: { studentId: { in: ids }, status: "ABANDONED", startedAt: { gte: since } },
+        _count: { _all: true },
+      })
+    : [];
+  const interruptedBy = new Map(interrupted.map((g) => [g.studentId, g._count._all]));
+
   return Promise.all(
     links.map(async ({ student }) => ({
       id: student.id,
       displayName: student.displayName,
       summary: summarizeStudent(await metricsForStudent(student.id, days, now)),
+      interrupted: interruptedBy.get(student.id) ?? 0,
     })),
   );
+}
+
+export interface InterruptedSession {
+  id: string;
+  activityTitle: string;
+  startedAt: Date;
+  durationMs: number;
+  attempts: number;
+}
+
+async function interruptedForStudent(studentId: string, days: Period, now: Date): Promise<InterruptedSession[]> {
+  const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const rows = await prisma.activitySession.findMany({
+    where: { studentId, status: "ABANDONED", startedAt: { gte: since } },
+    orderBy: { startedAt: "desc" },
+    take: 20,
+    select: {
+      id: true,
+      startedAt: true,
+      durationMs: true,
+      totalAttempts: true,
+      activity: { select: { title: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    activityTitle: r.activity.title,
+    startedAt: r.startedAt,
+    durationMs: r.durationMs ?? 0,
+    attempts: r.totalAttempts,
+  }));
 }
 
 export interface StudentReport {
@@ -108,6 +157,8 @@ export interface StudentReport {
   otherAdults: number;
   days: Period;
   sessions: SessionMetrics[];
+  /** Sessões não terminadas: ficam FORA dos gráficos de autonomia (são parciais). */
+  interrupted: InterruptedSession[];
   summary: StudentSummary;
   byModule: ModuleSummary[];
   assignable: { id: string; title: string; module: string }[];
@@ -138,14 +189,18 @@ export async function getStudentReport(
       otherAdults: await prisma.guidance.count({ where: { studentId, adultId: { not: adultId } } }),
       days,
       sessions: [],
+      interrupted: [],
       summary: summarizeStudent([]),
       byModule: [],
       assignable: [],
     };
   }
 
-  const [sessions, published, assigned, otherAdults] = await Promise.all([
+  await closeStaleSessions({ now, studentIds: [studentId] });
+
+  const [sessions, interrupted, published, assigned, otherAdults] = await Promise.all([
     metricsForStudent(studentId, days, now),
+    interruptedForStudent(studentId, days, now),
     prisma.activity.findMany({
       where: { published: true },
       orderBy: { title: "asc" },
@@ -165,6 +220,7 @@ export async function getStudentReport(
     otherAdults,
     days,
     sessions,
+    interrupted,
     summary: summarizeStudent(sessions),
     byModule: summarizeByModule(sessions),
     assignable: published.filter((a) => !taken.has(a.id)),

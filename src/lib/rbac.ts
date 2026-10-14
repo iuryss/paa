@@ -26,6 +26,7 @@ const PUBLIC_PREFIXES = [
   "/termo",
   "/api/auth",
   "/api/health",
+  "/api/cron", // protegida por CRON_SECRET na própria rota
 ];
 
 export type AccessDecision =

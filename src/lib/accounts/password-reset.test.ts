@@ -110,9 +110,9 @@ describe("requestPasswordReset", () => {
     const { logger } = jest.requireActual("@/lib/logger");
     const spy = jest.spyOn(logger, "error").mockImplementation(() => {});
     m.userFind.mockResolvedValue(user);
-    m.send.mockRejectedValue(new EmailError("x", { status: 403 }));
+    m.send.mockRejectedValue(new EmailError("x", { status: 535, providerName: "EAUTH" }));
     await requestPasswordReset(EMAIL, BASE, NOW);
-    expect(spy).toHaveBeenCalledWith("password_reset.email_failed", { code: "forbidden", status: 403 });
+    expect(spy).toHaveBeenCalledWith("password_reset.email_failed", { code: "smtp_auth", status: 535 });
     expect(JSON.stringify(spy.mock.calls)).not.toContain(EMAIL);
     spy.mockRestore();
   });

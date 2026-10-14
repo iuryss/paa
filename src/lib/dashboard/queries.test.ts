@@ -10,6 +10,8 @@ const m = {
   activityMany: jest.fn(),
   assignmentMany: jest.fn(),
   auditCreate: jest.fn(),
+  groupBy: jest.fn(),
+  closeStale: jest.fn(),
 };
 
 jest.mock("@/lib/db", () => ({
@@ -20,13 +22,18 @@ jest.mock("@/lib/db", () => ({
       count: (...a: unknown[]) => m.guidanceCount(...a),
     },
     user: { findFirst: (...a: unknown[]) => m.userFind(...a) },
-    activitySession: { findMany: (...a: unknown[]) => m.sessionMany(...a) },
+    activitySession: {
+      findMany: (...a: unknown[]) => m.sessionMany(...a),
+      groupBy: (...a: unknown[]) => m.groupBy(...a),
+    },
     attempt: { findMany: (...a: unknown[]) => m.attemptMany(...a) },
     activity: { findMany: (...a: unknown[]) => m.activityMany(...a) },
     assignment: { findMany: (...a: unknown[]) => m.assignmentMany(...a) },
     auditLog: { create: (...a: unknown[]) => m.auditCreate(...a) },
   },
 }));
+
+jest.mock("@/lib/telemetry", () => ({ closeStaleSessions: (...a: unknown[]) => m.closeStale(...a) }));
 
 const NOW = new Date("2026-10-07T12:00:00Z");
 
@@ -41,6 +48,14 @@ const sessionRow = {
   activity: { title: "Letras", module: "GRAFIA" },
 };
 
+const interruptedRow = {
+  id: "s9",
+  startedAt: new Date("2026-10-06T09:00:00Z"),
+  durationMs: 45_000,
+  totalAttempts: 2,
+  activity: { title: "Contas" },
+};
+
 const attemptRows = [
   { sessionId: "s1", itemKey: "a", correct: true, helpLevel: "NONE", elapsedMs: 2000, attemptNo: 1 },
   { sessionId: "s1", itemKey: "b", correct: false, helpLevel: "NONE", elapsedMs: 1000, attemptNo: 1 },
@@ -50,8 +65,13 @@ const attemptRows = [
 beforeEach(() => {
   Object.values(m).forEach((fn) => fn.mockReset());
   m.auditCreate.mockResolvedValue({});
-  m.sessionMany.mockResolvedValue([sessionRow]);
+  // Sessões concluídas e interrompidas vêm da mesma tabela: o `where.status` decide o que volta.
+  m.sessionMany.mockImplementation(async (args: { where: { status: string } }) =>
+    args.where.status === "ABANDONED" ? [interruptedRow] : [sessionRow],
+  );
   m.attemptMany.mockResolvedValue(attemptRows);
+  m.groupBy.mockResolvedValue([]);
+  m.closeStale.mockResolvedValue(0);
 });
 
 describe("parsePeriod", () => {
@@ -169,5 +189,57 @@ describe("getInactiveStudents", () => {
     expect(m.guidanceMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { adultId: "prof1", student: { active: false } } }),
     );
+  });
+});
+
+describe("sessões interrompidas", () => {
+  it("o painel fecha as sessões abandonadas dos alunos do adulto e conta as interrompidas por aluno", async () => {
+    m.guidanceMany.mockResolvedValue([
+      { student: { id: "stu1", displayName: "Sol" } },
+      { student: { id: "stu2", displayName: "Lua" } },
+    ]);
+    m.groupBy.mockResolvedValue([{ studentId: "stu2", _count: { _all: 3 } }]);
+
+    const cards = await getStudentsOverview("prof1", 30, NOW);
+
+    expect(m.closeStale).toHaveBeenCalledWith({ now: NOW, studentIds: ["stu1", "stu2"] });
+    expect(cards.map((c) => [c.displayName, c.interrupted])).toEqual([["Sol", 0], ["Lua", 3]]);
+    const where = m.groupBy.mock.calls[0]?.[0].where;
+    expect(where).toMatchObject({ studentId: { in: ["stu1", "stu2"] }, status: "ABANDONED" });
+  });
+
+  it("sem alunos nem consulta ao banco para contar", async () => {
+    m.guidanceMany.mockResolvedValue([]);
+    await expect(getStudentsOverview("prof1", 30, NOW)).resolves.toEqual([]);
+    expect(m.groupBy).not.toHaveBeenCalled();
+  });
+
+  it("o relatório lista as interrompidas à parte e elas NÃO entram nos números de autonomia", async () => {
+    m.guidanceFind.mockResolvedValue({ id: "g1" });
+    m.guidanceCount.mockResolvedValue(0);
+    m.userFind.mockResolvedValue({ id: "stu1", displayName: "Sol", active: true });
+    m.activityMany.mockResolvedValue([]);
+    m.assignmentMany.mockResolvedValue([]);
+
+    const report = await getStudentReport("prof1", "stu1", 30, NOW);
+
+    expect(m.closeStale).toHaveBeenCalledWith({ now: NOW, studentIds: ["stu1"] });
+    expect(report?.interrupted).toEqual([
+      { id: "s9", activityTitle: "Contas", startedAt: new Date("2026-10-06T09:00:00Z"), durationMs: 45_000, attempts: 2 },
+    ]);
+    expect(report?.sessions).toHaveLength(1); // só a concluída
+    expect(report?.summary.sessions).toBe(1);
+    const statuses = m.sessionMany.mock.calls.map((c) => c[0].where.status);
+    expect(statuses).toEqual(expect.arrayContaining(["COMPLETED", "ABANDONED"]));
+  });
+
+  it("aluno desativado não tem sessões interrompidas exibidas nem consulta de uso", async () => {
+    m.guidanceFind.mockResolvedValue({ id: "g1" });
+    m.guidanceCount.mockResolvedValue(0);
+    m.userFind.mockResolvedValue({ id: "stu1", displayName: "Sol", active: false });
+    const report = await getStudentReport("prof1", "stu1", 30, NOW);
+    expect(report?.interrupted).toEqual([]);
+    expect(m.sessionMany).not.toHaveBeenCalled();
+    expect(m.closeStale).not.toHaveBeenCalled();
   });
 });

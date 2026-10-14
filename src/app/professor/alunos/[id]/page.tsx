@@ -50,7 +50,7 @@ export default async function AlunoReportPage({
   const report = await getStudentReport(session.user.id, id, days);
   if (!report) notFound(); // sem vínculo = não existe (não confirma que o aluno existe)
 
-  const { student, sessions, summary, byModule, assignable, otherAdults } = report;
+  const { student, sessions, interrupted, summary, byModule, assignable, otherAdults } = report;
 
   // Consentimento revogado: nenhum dado de desempenho é exibido; só as opções de privacidade.
   if (!student.active) {
@@ -99,6 +99,7 @@ export default async function AlunoReportPage({
           <Stat label="Tempo até acertar" value={summary.avgItemMs ? formatSeconds(summary.avgItemMs) : "—"} />
           <Stat label="Tempo total" value={formatDuration(summary.totalMs)} />
           <Stat label="Redirecionamentos" value={String(summary.redirects)} />
+          <Stat label="Interrompidas" value={String(interrupted.length)} />
         </dl>
         <p className="mt-6 text-label text-ink-muted">{TREND_LABEL[summary.trend]}.</p>
       </Card>
@@ -204,6 +205,38 @@ export default async function AlunoReportPage({
         displayName={student.displayName}
         initial={await loadPreferences(student.id)}
       />
+
+      {interrupted.length > 0 ? (
+        <section aria-labelledby="interrompidas" className="flex flex-col gap-4">
+          <h2 id="interrompidas" className="text-subtitle">Sessões interrompidas</h2>
+          <p className="text-label text-ink-muted">
+            {student.displayName} começou e não terminou (ou ficou 30 minutos sem responder). Esses dados são
+            parciais e não entram nos gráficos de autonomia.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-left text-label">
+              <thead>
+                <tr>
+                  <th scope="col" className="pb-2 pr-4">Quando</th>
+                  <th scope="col" className="pb-2 pr-4">Atividade</th>
+                  <th scope="col" className="pb-2 pr-4">Tempo até parar</th>
+                  <th scope="col" className="pb-2">Respostas dadas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {interrupted.map((s) => (
+                  <tr key={s.id} className="border-t border-border-subtle">
+                    <th scope="row" className="py-2 pr-4">{formatDateTime(s.startedAt)}</th>
+                    <td className="py-2 pr-4">{s.activityTitle}</td>
+                    <td className="py-2 pr-4">{formatDuration(s.durationMs)}</td>
+                    <td className="py-2">{s.attempts}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       <ResetPinCard studentId={student.id} displayName={student.displayName} />
 

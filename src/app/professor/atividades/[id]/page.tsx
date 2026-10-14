@@ -2,9 +2,10 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { auth } from "@/auth";
-import { ActivityEditor, MODULE_TITLE } from "@/components/activities/activity-editor";
+import { ActivityEditor } from "@/components/activities/activity-editor";
 import { buttonVariants } from "@/components/ui/button";
 import { getActivityForEdit } from "@/lib/activities/service";
+import { MODULE_LABEL } from "@/lib/dashboard/metrics";
 import { idSchema } from "@/lib/validation/activities";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +22,7 @@ export default async function EditarAtividadePage({ params }: { params: Promise<
     <main className="flex flex-col gap-12">
       <header className="flex flex-col gap-2">
         <h1>{activity.title}</h1>
-        <p className="text-subtitle">Atividade de {MODULE_TITLE[activity.module]}</p>
+        <p className="text-subtitle">Atividade de {MODULE_LABEL[activity.module]}</p>
       </header>
       <ActivityEditor
         module={activity.module}

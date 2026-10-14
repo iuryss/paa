@@ -4,9 +4,10 @@ const prodEnv = {
   NODE_ENV: "production",
   AUTH_URL: "https://app.escola.com.br",
   AUTH_SECRET: "x".repeat(40),
-  EMAIL_PROVIDER: "resend",
-  RESEND_API_KEY: "re_1234567890abcdef",
-  EMAIL_FROM: "Plataforma <nao-responda@escola.com.br>",
+  CRON_SECRET: "c".repeat(32),
+  EMAIL_PROVIDER: "gmail",
+  GMAIL_USER: "plataforma.escola@gmail.com",
+  GMAIL_APP_PASSWORD: "abcd efgh ijkl mnop",
   LEGAL_CONTROLLER_NAME: "Escola Girassol",
   LEGAL_DPO_EMAIL: "dpo@escola.com.br",
   LEGAL_REVIEWED: "true",
@@ -72,12 +73,12 @@ describe("runSystemChecks", () => {
     expect(byId(await runSystemChecks({ env, ...healthy }))["email"]?.detail).toContain("SMTP configurado (smtp.escola.com)");
   });
 
-  it("Resend em produção sem chave: mostra quais variáveis faltam", async () => {
-    const { RESEND_API_KEY: _k, ...env } = prodEnv;
-    void _k;
+  it("Nenhum provedor configurado em produção: mostra quais variáveis faltam", async () => {
+    const { GMAIL_USER: _u, GMAIL_APP_PASSWORD: _p, EMAIL_PROVIDER: _e, ...env } = prodEnv;
+    void _u; void _p; void _e;
     const c = byId(await runSystemChecks({ env, ...healthy }));
     expect(c["email"]).toMatchObject({ status: "warn" });
-    expect(c["email"]?.detail).toContain("RESEND_API_KEY");
+    expect(c["email"]?.detail).toContain("GMAIL_USER");
   });
 
   it.each([
@@ -89,6 +90,16 @@ describe("runSystemChecks", () => {
     const c = byId(await runSystemChecks({ env: { ...prodEnv, AUTH_URL: authUrl }, ...healthy }));
     expect(c["auth-url"]?.status).toBe("warn");
     expect(c["auth-url"]?.detail).toMatch(pattern);
+  });
+
+  it("sem CRON_SECRET em produção avisa (a limpeza diária não roda); em desenvolvimento não", async () => {
+    const { CRON_SECRET: _c, ...semCron } = prodEnv;
+    void _c;
+    const prod = byId(await runSystemChecks({ env: semCron, ...healthy }));
+    expect(prod["cron"]?.status).toBe("warn");
+    expect(prod["cron"]?.detail).toMatch(/CRON_SECRET/);
+    const dev = byId(await runSystemChecks({ env: { ...semCron, NODE_ENV: "development" }, ...healthy }));
+    expect(dev["cron"]?.status).toBe("ok");
   });
 
   it("AUTH_SECRET curto ou ausente", async () => {
@@ -106,7 +117,7 @@ describe("runSystemChecks", () => {
   it("NUNCA expõe valores de segredos", async () => {
     const text = JSON.stringify(await runSystemChecks({ env: prodEnv, ...healthy }));
     expect(text).not.toContain(prodEnv.AUTH_SECRET);
-    expect(text).not.toContain(prodEnv.RESEND_API_KEY);
+    expect(text).not.toContain("abcdefghijklmnop");
     expect(text).not.toContain("dpo@escola.com.br");
   });
 });

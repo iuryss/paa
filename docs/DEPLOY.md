@@ -19,23 +19,29 @@ Funciona para qualquer destinatário e não custa nada. Serve para: "esqueci min
    | `GMAIL_APP_PASSWORD` | o código de 16 letras (com ou sem espaços; **sem aspas**) |
    | `AUTH_URL` | `https://SEU-PROJETO.vercel.app` (o endereço gratuito da Vercel serve; sem barra no fim) |
 
-   `EMAIL_FROM` é opcional (o remetente padrão é a própria conta Gmail). As variáveis `RESEND_*` não são usadas.
+   `EMAIL_FROM` é opcional (o remetente padrão é a própria conta Gmail).
 5. Faça um **novo deploy** e, em *Minha conta*, clique em **Enviar e-mail de teste para mim**. Se falhar, a tela explica o motivo.
 
-Limites e cuidados: o Gmail gratuito envia cerca de **500 e-mails por dia**, mais do que suficiente aqui. Os primeiros e-mails podem cair no **spam**: peça aos colegas para marcar "não é spam". O remetente é o próprio Gmail (as respostas chegam nele, o que é útil). Para o encarregado (DPO), `LEGAL_DPO_EMAIL` pode ser esse mesmo Gmail. Se um dia comprarem um domínio, é só trocar para `resend` (próxima seção).
+Limites e cuidados: o Gmail gratuito envia cerca de **500 e-mails por dia**, mais do que suficiente aqui. Os primeiros e-mails podem cair no **spam**: peça aos colegas para marcar "não é spam". O remetente é o próprio Gmail (as respostas chegam nele, o que é útil). Para o encarregado (DPO), `LEGAL_DPO_EMAIL` pode ser esse mesmo Gmail. Se um dia quiserem enviar com um endereço do domínio da escola, use `EMAIL_PROVIDER=smtp` com o servidor SMTP que o provedor de e-mail indicar (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` e `EMAIL_FROM`).
 
-## (Opcional) Domínio próprio — site e e-mail com endereço da escola
+## (Opcional) Domínio próprio para o site
 
-Um mesmo domínio serve às duas coisas, e os registros não se atrapalham (o site usa o domínio principal; o Resend usa o subdomínio `send` e a chave DKIM). Todos os registros são criados no **painel de DNS de onde o domínio foi comprado** (campos: Tipo, Nome/Host, Valor, TTL).
+Não é necessário: o endereço gratuito `https://SEU-PROJETO.vercel.app` funciona. Se a escola quiser um endereço próprio:
 
-1. **Site na Vercel.** Vercel → projeto → *Settings → Domains → Add* → `seudominio.com`. A Vercel mostra os registros certos para o seu projeto; copie exatamente. Em geral: `A` com Nome `@` apontando para o IP que ela indicar e `CNAME` com Nome `www` apontando para `cname.vercel-dns.com`. Aguarde "Valid Configuration" (o HTTPS é automático). Defina o domínio principal e deixe o `www` redirecionando.
-2. **Variável `AUTH_URL`** = `https://seudominio.com` (sem barra no fim, sem aspas) e **novo deploy**.
-3. **E-mail no Resend.** *Domains → Add Domain* → `seudominio.com` → copie os registros que ele mostrar (normalmente 1 `MX` e 2 `TXT`: SPF e DKIM) → *Verify*. Recomendado também um `TXT` `_dmarc` com `v=DMARC1; p=none;`.
-4. **Variável `EMAIL_FROM`** = `"Plataforma TEA <nao-responda@seudominio.com>"` e novo deploy. Não precisa existir caixa de e-mail para o `nao-responda`.
-5. **Caixa para o encarregado (DPO).** Os pais precisam conseguir escrever para a escola. Sem TI, use um serviço gratuito de **encaminhamento** (ex.: ImprovMX, Cloudflare Email Routing ou Zoho Mail) para `privacidade@seudominio.com` chegar no e-mail real de quem responde. Depois defina `LEGAL_DPO_EMAIL=privacidade@seudominio.com`.
-6. **Conferir** (PowerShell): `Resolve-DnsName seudominio.com` e `Resolve-DnsName resend._domainkey.seudominio.com -Type TXT`. Depois, em *Minha conta → Verificação do sistema*, tudo "ok", e **Enviar e-mail de teste para mim**.
+1. Compre/registre o domínio e use o **painel de DNS de onde ele foi comprado** (campos: Tipo, Nome/Host, Valor, TTL).
+2. Vercel → projeto → *Settings → Domains → Add* → `seudominio.com`. A Vercel mostra os registros certos para o seu projeto; copie exatamente. Aguarde "Valid Configuration" (o HTTPS é automático).
+3. Atualize `AUTH_URL` para `https://seudominio.com` (sem barra no fim, sem aspas) e faça um **novo deploy**.
+4. Conferir (PowerShell): `Resolve-DnsName seudominio.com`.
 
-Problemas comuns: o campo *Nome* de muitos painéis já acrescenta o domínio sozinho (escreva só `send`, não `send.seudominio.com`); não crie dois SPF no mesmo nome; CNAME não pode ficar no domínio raiz (`@`), use `A`; a propagação leva de minutos a algumas horas.
+Problemas comuns: o campo *Nome* de muitos painéis já acrescenta o domínio sozinho; CNAME não pode ficar no domínio raiz (`@`), use `A`; a propagação leva de minutos a algumas horas. O e-mail continua pelo Gmail (ou SMTP) independentemente do domínio do site.
+
+## Sessões interrompidas (limpeza diária)
+
+Quando a criança larga a atividade no meio, a sessão fica "em andamento". Depois de 30 minutos sem resposta ela passa a **interrompida** e aparece para o professor (separada dos gráficos de autonomia). Isso acontece de dois jeitos: ao abrir o painel ou o relatório, e por uma **limpeza diária** (Vercel Cron, definida em `vercel.json`, todo dia às 06:00 UTC).
+
+1. Defina `CRON_SECRET` na Vercel com 16+ caracteres (`node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"`). A Vercel envia esse valor sozinha como `Authorization: Bearer ...` ao chamar `/api/cron/sessoes`.
+2. Sem `CRON_SECRET`, a rota recusa tudo (503) e a *Verificação do sistema* mostra "atenção". O restante continua funcionando.
+3. Se a criança voltar a uma sessão interrompida e responder, a sessão é reaberta sem perder nada.
 
 ## Redis (limite de tentativas de login)
 
@@ -46,17 +52,6 @@ O bloqueio após 5 falhas (PIN do aluno, senha do professor, troca de senha, ped
 3. Confirme em **Minha conta → Verificação do sistema**: "Limite de tentativas de login: ok, Redis (compartilhado entre todas as instâncias)".
 
 Se o Redis cair, o login **não** fica fora do ar: o sistema usa a memória como reserva (proteção reduzida por instância), registra `rate_limit.redis_unavailable` no log e o painel mostra "atenção". Os identificadores (e-mail, código do aluno) vão ao Redis apenas como hash SHA-256.
-
-## E-mail com Resend (exige domínio)
-
-Alternativa ao Gmail, com remetente no domínio da escola (`EMAIL_PROVIDER=resend`). Sem `RESEND_API_KEY` e `EMAIL_FROM` a aplicação recusa enviar por ele.
-
-1. Crie a conta em resend.com e **verifique o domínio** de envio (registros DNS SPF e DKIM). Sem isso os e-mails caem no spam ou são recusados.
-2. Gere a chave de API e defina `RESEND_API_KEY` e `EMAIL_FROM` (`"Plataforma TEA <nao-responda@suaescola.com.br>"`).
-3. Defina `AUTH_URL` com o endereço público: os links dos e-mails são montados a partir dele (nunca do cabeçalho Host).
-4. Teste: em **Minha conta**, clique em **Enviar e-mail de teste para mim** e confira a caixa de entrada **e** o spam. Se falhar, a tela explica a causa (chave inválida, domínio não verificado, formato do remetente...). O log do servidor também registra o código (`email_test.failed`, `password_reset.email_failed`).
-
-Em desenvolvimento use `EMAIL_PROVIDER=console`: o e-mail aparece no terminal do servidor e nada é enviado.
 
 ## Antes de qualquer deploy (checklist)
 
@@ -111,7 +106,7 @@ docker compose -f docker-compose.prod.yml exec -T db sh -c 'pg_dump -U "$POSTGRE
    | `DATABASE_URL` | conexão do banco externo (obrigatória) |
    | `AUTH_SECRET` | segredo novo, só de produção (obrigatória) |
    | `AUTH_URL` | `https://seu-dominio` (obrigatória: os links de e-mail são montados a partir dela) |
-   | `EMAIL_PROVIDER`, `RESEND_API_KEY`, `EMAIL_FROM` | envio de e-mail (veja a seção E-mail) |
+   | `EMAIL_PROVIDER`, `GMAIL_USER`, `GMAIL_APP_PASSWORD` | envio de e-mail (veja "E-mail gratuito com Gmail") |
    | `LEGAL_CONTROLLER_NAME`, `LEGAL_DPO_EMAIL`, `LEGAL_REVIEWED` | textos de privacidade e termo |
    | `LOG_LEVEL` | opcional |
 3. **Build Command**: `prisma migrate deploy && npm run build`.

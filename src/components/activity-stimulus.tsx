@@ -92,8 +92,11 @@ export function ActivityStimulus({ stimulus }: { stimulus: Stimulus }) {
       return <MapStimulus piece={stimulus.piece} position={stimulus.position} />;
     case "letter":
       return (
-        <p className="font-letra text-letra-bastao" aria-label={`Letra ${stimulus.display}`}>
-          {stimulus.display}
+        // aria-label não é permitido em <p>: a letra visível fica escondida do leitor de tela e um texto
+        // só-para-leitor diz "Letra A" (assim a criança que usa leitor de tela também ouve).
+        <p className="font-letra text-letra-bastao">
+          <span aria-hidden="true">{stimulus.display}</span>
+          <span className="sr-only">Letra {stimulus.display}</span>
         </p>
       );
     case "count":

@@ -40,7 +40,7 @@ describe("TestEmailButton", () => {
     fetchMock.mockResolvedValue({ ok: status < 400, status, json: async () => body });
 
   it("envio real: confirma o destino mascarado e lembra do spam", async () => {
-    reply(200, { ok: true, to: "a***@escola.com", provider: "resend" });
+    reply(200, { ok: true, to: "a***@escola.com", provider: "gmail" });
     render(<TestEmailButton />);
     await userEvent.click(screen.getByRole("button", { name: "Enviar e-mail de teste para mim" }));
     expect(await screen.findByText("Enviado!")).toBeInTheDocument();

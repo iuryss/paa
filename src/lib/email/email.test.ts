@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { readEmailConfig } from "./config";
-import { EmailError, sendEmail, type EmailMessage } from "./send";
-import { escapeHtml, invitationEmail, passwordResetEmail } from "./templates";
+import { sendEmail, type EmailMessage } from "./send";
+import { escapeHtml, invitationEmail, passwordResetEmail, testEmail } from "./templates";
 
 const message: EmailMessage = {
   to: "ana@escola.com",
@@ -16,80 +16,37 @@ describe("readEmailConfig", () => {
     expect(readEmailConfig({ NODE_ENV: "test" })).toEqual({ EMAIL_PROVIDER: "console" });
   });
 
-  it("em produção o padrão é 'resend' e exige chave e remetente", () => {
-    expect(() => readEmailConfig({ NODE_ENV: "production" })).toThrow(/RESEND_API_KEY.*EMAIL_FROM/);
+  it("em produção o padrão é o Gmail e exige as duas variáveis", () => {
+    expect(() => readEmailConfig({ NODE_ENV: "production" })).toThrow(/GMAIL_USER.*GMAIL_APP_PASSWORD/);
     expect(
-      readEmailConfig({
-        NODE_ENV: "production",
-        RESEND_API_KEY: "re_1234567890abcdef",
-        EMAIL_FROM: "Plataforma <nao-responda@escola.com.br>",
-      }),
-    ).toMatchObject({ EMAIL_PROVIDER: "resend" });
+      readEmailConfig({ NODE_ENV: "production", GMAIL_USER: "plataforma@gmail.com", GMAIL_APP_PASSWORD: "abcdefghijklmnop" }),
+    ).toMatchObject({ EMAIL_PROVIDER: "gmail" });
   });
 
   it("proíbe o provedor 'console' em produção", () => {
     expect(() => readEmailConfig({ NODE_ENV: "production", EMAIL_PROVIDER: "console" })).toThrow(/produção/);
   });
 
-  it("rejeita provedor desconhecido e nunca ecoa a chave no erro", () => {
+  it("rejeita provedor desconhecido (inclusive o antigo 'resend') e nunca ecoa a senha no erro", () => {
     expect(() => readEmailConfig({ EMAIL_PROVIDER: "sendgrid" })).toThrow(/EMAIL_PROVIDER/);
+    expect(() => readEmailConfig({ EMAIL_PROVIDER: "resend", RESEND_API_KEY: "re_1234567890abcdef" })).toThrow(/EMAIL_PROVIDER/);
     try {
-      readEmailConfig({ EMAIL_PROVIDER: "resend", RESEND_API_KEY: "curta" });
+      readEmailConfig({ EMAIL_PROVIDER: "gmail", GMAIL_USER: "a@gmail.com", GMAIL_APP_PASSWORD: "curta" });
     } catch (e) {
       expect((e as Error).message).not.toContain("curta");
     }
   });
 });
 
-describe("sendEmail", () => {
-  const resend = {
-    EMAIL_PROVIDER: "resend",
-    RESEND_API_KEY: "re_segredo_1234567890",
-    EMAIL_FROM: "Plataforma <nao-responda@escola.com.br>",
-  } as const;
-
-  it("console: imprime o e-mail no terminal e não faz requisição", async () => {
+describe("sendEmail — modo console", () => {
+  it("imprime o e-mail no terminal e não abre conexão alguma", async () => {
     const log = jest.spyOn(console, "log").mockImplementation(() => {});
-    const fetchImpl = jest.fn();
-    await sendEmail(message, { config: { EMAIL_PROVIDER: "console" }, fetchImpl });
+    const createTransport = jest.fn();
+    await sendEmail(message, { config: { EMAIL_PROVIDER: "console" }, createTransport });
     expect(log).toHaveBeenCalledWith(expect.stringContaining("ana@escola.com"));
     expect(log).toHaveBeenCalledWith(expect.stringContaining("redefinir-senha/TOKEN"));
-    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(createTransport).not.toHaveBeenCalled();
     log.mockRestore();
-  });
-
-  it("resend: envia JSON com remetente, destinatário e chave no cabeçalho", async () => {
-    const fetchImpl = jest.fn().mockResolvedValue({ ok: true, status: 200 });
-    await sendEmail(message, { config: resend, fetchImpl });
-
-    const [url, init] = fetchImpl.mock.calls[0]!;
-    expect(url).toBe("https://api.resend.com/emails");
-    expect(init.method).toBe("POST");
-    expect(init.headers.Authorization).toBe("Bearer re_segredo_1234567890");
-    expect(JSON.parse(init.body)).toEqual({
-      from: "Plataforma <nao-responda@escola.com.br>",
-      to: ["ana@escola.com"],
-      subject: "Assunto",
-      text: message.text,
-      html: message.html,
-    });
-    expect(init.signal).toBeInstanceOf(AbortSignal);
-  });
-
-  it("resposta de erro do provedor vira EmailError sem vazar a chave nem o conteúdo", async () => {
-    const fetchImpl = jest.fn().mockResolvedValue({ ok: false, status: 403 });
-    const error = await sendEmail(message, { config: resend, fetchImpl }).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(EmailError);
-    expect((error as Error).message).toContain("403");
-    expect((error as Error).message).not.toContain("re_segredo");
-    expect((error as Error).message).not.toContain("TOKEN");
-  });
-
-  it("falha de rede também vira EmailError genérico", async () => {
-    const fetchImpl = jest.fn().mockRejectedValue(new Error("getaddrinfo ENOTFOUND api.resend.com"));
-    const error = await sendEmail(message, { config: resend, fetchImpl }).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(EmailError);
-    expect((error as Error).message).toBe("Falha de rede ao enviar e-mail");
   });
 });
 
@@ -110,6 +67,13 @@ describe("templates", () => {
     expect(mail.text).toContain("Beto convidou você");
     expect(mail.text).toContain("7 dias");
     expect(mail.html).toContain(link);
+  });
+
+  it("e-mail de teste não contém link nem ação", () => {
+    const mail = testEmail({ to: "ana@escola.com", name: "Ana" });
+    expect(mail.subject).toContain("Teste");
+    expect(mail.text).toContain("Nenhuma ação é necessária");
+    expect(mail.text).not.toMatch(/https?:/);
   });
 
   it("escapa HTML em nomes e links (sem injeção no corpo do e-mail)", () => {

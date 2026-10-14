@@ -12,3 +12,7 @@ docker-compose*.yml
 .claude
 docs
 .next-test
+.next-e2e
+e2e
+playwright-report
+test-results

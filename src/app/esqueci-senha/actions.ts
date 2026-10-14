@@ -3,6 +3,7 @@
 import { after } from "next/server";
 import type { ForgotState } from "@/components/account/forgot-password-form";
 import { requestPasswordReset } from "@/lib/accounts/password-reset";
+import { pickFields } from "@/lib/form-data";
 import { logger } from "@/lib/logger";
 import { firstIssue, forgotPasswordSchema } from "@/lib/validation/accounts";
 
@@ -10,7 +11,7 @@ export async function requestPasswordResetAction(
   _prev: ForgotState,
   formData: FormData,
 ): Promise<ForgotState> {
-  const parsed = forgotPasswordSchema.safeParse(Object.fromEntries(formData));
+  const parsed = forgotPasswordSchema.safeParse(pickFields(formData, ["email"]));
   if (!parsed.success) return { done: false, error: firstIssue(parsed.error) };
 
   // O link usa AUTH_URL (configuração), nunca o cabeçalho Host: evita envenenamento do link de redefinição.

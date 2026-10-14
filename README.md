@@ -31,6 +31,21 @@ Contas de demonstração (somente desenvolvimento): veja o comentário no topo d
 | `npm run db:up` / `db:down` | Sobe/derruba o Postgres do Docker |
 | `npm run db:seed` | Dados de demonstração (recusa rodar em produção) |
 
+## Testes ponta a ponta (Playwright)
+
+Rodam num navegador real contra a versão de **produção** do app, com um banco **separado** (`tea_platform_e2e`) e um servidor de e-mail falso. Cobrem a jornada do aluno, o painel do professor, o editor, e-mails (esqueci a senha e convite), segurança/papéis, LGPD (revogar, exportar, excluir), sessões interrompidas e **acessibilidade (axe) nos 3 temas**.
+
+```bash
+docker compose up -d db
+docker exec tea-platform-db psql -U tea -d postgres -c "CREATE DATABASE tea_platform_e2e"   # uma vez
+DATABASE_URL="postgresql://tea:tea_dev_password@localhost:5433/tea_platform_e2e?schema=public" npm run e2e:prepare
+npx playwright install chromium                                                             # uma vez
+npm run e2e                  # compila e roda tudo (~3 min)
+E2E_SKIP_BUILD=1 npm run e2e # reaproveita a compilação anterior
+```
+
+O servidor de testes usa a pasta `.next-e2e` e a porta 3200: não interfere no `npm run dev`.
+
 ## Estrutura
 
 ```

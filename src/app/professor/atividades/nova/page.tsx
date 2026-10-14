@@ -2,10 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft, Hash, Map, Type } from "lucide-react";
 import { auth } from "@/auth";
-import { ActivityEditor, MODULE_TITLE } from "@/components/activities/activity-editor";
+import { ActivityEditor } from "@/components/activities/activity-editor";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { emptyItem } from "@/lib/activities/editor-model";
+import { MODULE_LABEL } from "@/lib/dashboard/metrics";
 import { isSupportedModule, type SupportedModule } from "@/lib/validation/activities";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +39,7 @@ export default async function NovaAtividadePage({
                 <Card className="flex items-start gap-4">
                   {c.icon}
                   <span className="flex flex-col gap-1">
-                    <span className="text-subtitle">{MODULE_TITLE[c.module]}</span>
+                    <span className="text-subtitle">{MODULE_LABEL[c.module]}</span>
                     <span className="text-label text-ink-muted">{c.text}</span>
                   </span>
                 </Card>
@@ -57,7 +58,7 @@ export default async function NovaAtividadePage({
   return (
     <main className="flex flex-col gap-12">
       <header className="flex flex-col gap-2">
-        <h1>Nova atividade de {MODULE_TITLE[modulo]}</h1>
+        <h1>Nova atividade de {MODULE_LABEL[modulo]}</h1>
       </header>
       <ActivityEditor
         module={modulo}

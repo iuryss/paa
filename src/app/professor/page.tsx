@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ListChecks, LogOut, Minus, Settings, ShieldOff, TrendingDown, TrendingUp, Info, UserRound } from "lucide-react";
+import { ListChecks, LogOut, Minus, PauseCircle, Settings, ShieldOff, TrendingDown, TrendingUp, Info, UserRound } from "lucide-react";
 import { auth } from "@/auth";
 import { signOutAction } from "@/app/entrar/actions";
 import { NewStudentForm } from "@/components/dashboard/new-student-form";
@@ -49,7 +49,7 @@ export default async function ProfessorPage({
           </Card>
         ) : (
           <ul className="grid gap-6 sm:grid-cols-2">
-            {students.map(({ id, displayName, summary }) => {
+            {students.map(({ id, displayName, summary, interrupted }) => {
               const TrendIcon = TREND_ICON[summary.trend];
               return (
                 <li key={id}>
@@ -75,6 +75,12 @@ export default async function ProfessorPage({
                         <TrendIcon aria-hidden="true" className="size-6 shrink-0" strokeWidth={2.5} />
                         {TREND_LABEL[summary.trend]}
                       </span>
+                      {interrupted > 0 ? (
+                        <span className="flex items-center gap-2 text-label">
+                          <PauseCircle aria-hidden="true" className="size-6 shrink-0" strokeWidth={2.5} />
+                          {interrupted} {interrupted === 1 ? "sessão interrompida" : "sessões interrompidas"}
+                        </span>
+                      ) : null}
                       <span className="text-label text-ink-muted">
                         {summary.lastSessionAt
                           ? `Última sessão: ${formatShortDate(summary.lastSessionAt)}`

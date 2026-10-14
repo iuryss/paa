@@ -4,17 +4,10 @@ import { z } from "zod";
  * Provedores de e-mail:
  *  - console: desenvolvimento, o e-mail aparece no terminal do servidor (nada é enviado);
  *  - gmail:   gratuito, sem domínio próprio. Uma conta Gmail + "senha de app" (2 variáveis);
- *  - smtp:    qualquer servidor SMTP (escola, Outlook corporativo, Brevo...);
- *  - resend:  API do Resend (exige domínio verificado para enviar a terceiros).
+ *  - smtp:    qualquer servidor SMTP (escola, Outlook corporativo, Brevo...).
  */
 const schema = z.discriminatedUnion("EMAIL_PROVIDER", [
   z.object({ EMAIL_PROVIDER: z.literal("console") }),
-  z.object({
-    EMAIL_PROVIDER: z.literal("resend"),
-    RESEND_API_KEY: z.string().min(10),
-    /** Ex.: "Plataforma TEA <nao-responda@suaescola.com.br>" (domínio verificado no Resend). */
-    EMAIL_FROM: z.string().min(5),
-  }),
   z.object({
     EMAIL_PROVIDER: z.literal("gmail"),
     GMAIL_USER: z.string().trim().email(),
@@ -79,9 +72,8 @@ function detectProvider(env: Env, production: boolean): string {
   const explicit = env.EMAIL_PROVIDER?.trim();
   if (explicit) return explicit;
   if (!production) return "console";
-  if (env.GMAIL_USER && env.GMAIL_APP_PASSWORD) return "gmail";
   if (env.SMTP_HOST) return "smtp";
-  return "resend";
+  return "gmail";
 }
 
 /** Erros listam só os NOMES das variáveis, nunca os valores. */
@@ -90,7 +82,6 @@ export function readEmailConfig(env: Env = process.env): EmailConfig {
 
   const parsed = schema.safeParse({
     EMAIL_PROVIDER: detectProvider(env, production),
-    RESEND_API_KEY: env.RESEND_API_KEY,
     EMAIL_FROM: env.EMAIL_FROM || undefined,
     GMAIL_USER: env.GMAIL_USER,
     GMAIL_APP_PASSWORD: env.GMAIL_APP_PASSWORD,

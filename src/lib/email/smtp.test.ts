@@ -31,7 +31,7 @@ describe("readEmailConfig — Gmail e SMTP", () => {
   it("em produção descobre sozinho o provedor pelas variáveis presentes (e esquecer EMAIL_PROVIDER não quebra)", () => {
     expect(readEmailConfig({ NODE_ENV: "production", ...gmail }).EMAIL_PROVIDER).toBe("gmail");
     expect(readEmailConfig({ NODE_ENV: "production", SMTP_HOST: "smtp.escola.com", SMTP_PORT: "587", SMTP_USER: "u", SMTP_PASS: "p", EMAIL_FROM: "Plataforma <a@escola.com>" }).EMAIL_PROVIDER).toBe("smtp");
-    expect(() => readEmailConfig({ NODE_ENV: "production" })).toThrow(/RESEND_API_KEY/); // nada configurado
+    expect(() => readEmailConfig({ NODE_ENV: "production" })).toThrow(/GMAIL_USER/); // nada configurado
   });
 
   it("EMAIL_FROM é opcional no Gmail (o padrão é a própria conta)", () => {
@@ -132,7 +132,6 @@ describe("sendEmail por SMTP — contra um servidor SMTP de verdade", () => {
   it("senha errada → EmailError 'smtp' com código EAUTH, traduzido para a senha de app", async () => {
     const error = (await sendEmail(mail, { config: config({ SMTP_PASS: "senha-errada" }) }).catch((e: unknown) => e)) as EmailError;
     expect(error).toBeInstanceOf(EmailError);
-    expect(error.transport).toBe("smtp");
     expect(error.providerName).toBe("EAUTH");
     expect(error.message).not.toContain("senha-errada");
 
@@ -159,7 +158,7 @@ describe("sendEmail por SMTP — contra um servidor SMTP de verdade", () => {
 });
 
 describe("describeEmailFailure — SMTP", () => {
-  const smtp = (status: number | undefined, providerName?: string) => new EmailError("x", { status, providerName, transport: "smtp" });
+  const smtp = (status: number | undefined, providerName?: string) => new EmailError("x", { status, providerName });
 
   it.each([
     [undefined, "EAUTH", "smtp_auth"],
@@ -176,10 +175,5 @@ describe("describeEmailFailure — SMTP", () => {
     [500, undefined, "provider_error"],
   ])("status=%s código=%s → %s", (status, code, expected) => {
     expect(describeEmailFailure(smtp(status as number | undefined, code)).code).toBe(expected);
-  });
-
-  it("os códigos HTTP do Resend continuam com os significados antigos (401 ≠ 535)", () => {
-    expect(describeEmailFailure(new EmailError("x", { status: 401, transport: "http" })).code).toBe("invalid_key");
-    expect(describeEmailFailure(new EmailError("x", { status: 403, transport: "http" })).code).toBe("forbidden");
   });
 });

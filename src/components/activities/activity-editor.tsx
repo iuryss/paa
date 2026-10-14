@@ -21,6 +21,7 @@ import {
   type EditorItem,
 } from "@/lib/activities/editor-model";
 import { shuffleItemOptions } from "@/lib/activities/shuffle";
+import { MODULE_LABEL } from "@/lib/dashboard/metrics";
 import {
   contentSchemas,
   DIRECTIONS,
@@ -30,12 +31,6 @@ import {
 
 const SELECT_CLASS =
   "min-h-target w-full rounded-[20px] border-2 border-border bg-surface px-4 text-body text-ink disabled:bg-disabled-bg disabled:text-disabled-ink";
-
-export const MODULE_TITLE: Record<SupportedModule, string> = {
-  LOCALIZACAO: "Localização",
-  GRAFIA: "Grafia",
-  MATEMATICA: "Matemática",
-};
 
 const DIFFICULTIES = [
   { value: "INICIAL", label: "Inicial" },
@@ -261,7 +256,7 @@ export function ActivityEditor({ module, activityId, initial, sessionCount = 0 }
 
       <section aria-labelledby={`${uid}-items`} className="flex flex-col gap-6">
         <h2 id={`${uid}-items`} className="text-subtitle">
-          Itens de {MODULE_TITLE[module]} ({items.length})
+          Itens de {MODULE_LABEL[module]} ({items.length})
         </h2>
         <ol className="flex flex-col gap-6">
           {items.map((item, i) => {

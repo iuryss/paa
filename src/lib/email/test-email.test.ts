@@ -22,7 +22,7 @@ beforeEach(async () => {
   m.find.mockResolvedValue(user);
   m.audit.mockResolvedValue({});
   m.send.mockResolvedValue(undefined);
-  m.config.mockReturnValue({ EMAIL_PROVIDER: "resend" });
+  m.config.mockReturnValue({ EMAIL_PROVIDER: "gmail" });
   await testEmailLimiter.reset("u1");
 });
 
@@ -35,7 +35,7 @@ describe("maskEmail", () => {
 describe("sendTestEmail", () => {
   it("envia SÓ para o e-mail do próprio usuário e devolve o endereço mascarado", async () => {
     const result = await sendTestEmail("u1");
-    expect(result).toEqual({ ok: true, maskedTo: "a***@escola.com", provider: "resend" });
+    expect(result).toEqual({ ok: true, maskedTo: "a***@escola.com", provider: "gmail" });
     expect(m.send.mock.calls[0]?.[0]).toMatchObject({ to: "ana.souza@escola.com", subject: expect.stringContaining("Teste") });
     expect(m.audit).toHaveBeenCalledWith({ data: { actorId: "u1", action: "email.test" } });
   });
@@ -62,15 +62,15 @@ describe("sendTestEmail", () => {
   });
 
   it("falha do provedor vira dica em português, sem segredos nem o endereço", async () => {
-    m.send.mockRejectedValue(new EmailError("x", { status: 403, providerName: "validation_error" }));
+    m.send.mockRejectedValue(new EmailError("x", { status: 535, providerName: "EAUTH" }));
     const result = await sendTestEmail("u1");
-    expect(result).toMatchObject({ ok: false, code: "send_failed", failure: { code: "forbidden", status: 403 } });
+    expect(result).toMatchObject({ ok: false, code: "send_failed", failure: { code: "smtp_auth", status: 535 } });
     expect(JSON.stringify(result)).not.toContain("ana.souza");
   });
 
   it("configuração ausente também é explicada", async () => {
     m.config.mockImplementation(() => {
-      throw new Error("Configuração de e-mail inválida. Verifique: RESEND_API_KEY");
+      throw new Error("Configuração de e-mail inválida. Verifique: GMAIL_USER");
     });
     await expect(sendTestEmail("u1")).resolves.toMatchObject({ ok: false, code: "send_failed", failure: { code: "config" } });
   });

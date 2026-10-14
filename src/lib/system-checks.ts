@@ -64,7 +64,6 @@ export async function runSystemChecks({
     const maskEmail = (e: string) => `${e.slice(0, 1)}***@${e.split("@")[1] ?? ""}`;
     const details: Record<string, string> = {
       console: "Modo terminal: o e-mail aparece no console do servidor e nada é enviado.",
-      resend: "Resend configurado. Use “Enviar e-mail de teste” para confirmar.",
       gmail: `Gmail configurado${config.EMAIL_PROVIDER === "gmail" ? ` (${maskEmail(config.GMAIL_USER)})` : ""}. Use “Enviar e-mail de teste” para confirmar.`,
       smtp: `SMTP configurado${config.EMAIL_PROVIDER === "smtp" ? ` (${config.SMTP_HOST})` : ""}. Use “Enviar e-mail de teste” para confirmar.`,
     };
@@ -103,6 +102,16 @@ export async function runSystemChecks({
     (env.AUTH_SECRET?.length ?? 0) >= 32,
     "Definido.",
     "Ausente ou curto (mínimo 32 caracteres).",
+  );
+
+  // Limpeza diária de sessões abandonadas (cron da Vercel)
+  const cronOk = (env.CRON_SECRET?.length ?? 0) >= 16;
+  add(
+    "cron",
+    "Limpeza de sessões interrompidas (CRON_SECRET)",
+    cronOk || !production,
+    cronOk ? "Configurada (roda 1 vez por dia)." : "Não é necessária em desenvolvimento.",
+    "Sem CRON_SECRET (mínimo 16 caracteres) a limpeza diária não roda. O painel ainda fecha as sessões antigas quando você abre o relatório.",
   );
 
   // Textos legais

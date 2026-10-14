@@ -15,6 +15,9 @@ export class TelemetryError extends Error {
 /** Teto de duração registrada: protege os gráficos de abas esquecidas abertas. */
 export const MAX_SESSION_MS = 2 * 60 * 60 * 1000;
 
+/** Sem nenhuma resposta por tanto tempo, a sessão é considerada interrompida. */
+export const STALE_AFTER_MS = 30 * 60 * 1000;
+
 /** Abre uma sessão. Só quem tem a atividade atribuída (e publicada) pode jogá-la. */
 export async function startSession(
   studentId: string,
@@ -58,7 +61,9 @@ export async function recordAttempt(
     },
   });
   if (!session) throw new TelemetryError("not_found");
-  if (session.status !== "IN_PROGRESS") throw new TelemetryError("closed");
+  // Só sessão concluída é definitiva. Se a criança voltou a uma sessão "interrompida", ela é reaberta.
+  if (session.status === "COMPLETED") throw new TelemetryError("closed");
+  const reopen = session.status === "ABANDONED";
 
   const parsed = parseActivityContent(session.activity.module, session.activity.content);
   if (!parsed.success) throw new TelemetryError("invalid_item");
@@ -87,6 +92,7 @@ export async function recordAttempt(
         correctCount: { increment: correct ? 1 : 0 },
         redirects: { increment: correct ? 0 : 1 },
         maxHelpLevel: maxHelp(session.maxHelpLevel, input.helpLevel),
+        ...(reopen ? { status: "IN_PROGRESS" as const, finishedAt: null, durationMs: null } : {}),
       },
     }),
   ]);
@@ -113,4 +119,47 @@ export async function finishSession(
     data: { status: "COMPLETED", finishedAt: now, durationMs },
   });
   return { durationMs };
+}
+
+/**
+ * Marca como INTERROMPIDAS as sessões abertas sem nenhuma resposta há mais de `staleMs`.
+ * O fim da sessão é o momento da última resposta (não "agora"), então a duração não infla.
+ * Roda por cron diário e também sob demanda, quando o professor abre o painel/relatório.
+ */
+export async function closeStaleSessions({
+  now = new Date(),
+  staleMs = STALE_AFTER_MS,
+  studentIds,
+}: { now?: Date; staleMs?: number; studentIds?: string[] } = {}): Promise<number> {
+  const cutoff = new Date(now.getTime() - staleMs);
+  const candidates = await prisma.activitySession.findMany({
+    where: {
+      status: "IN_PROGRESS",
+      startedAt: { lt: cutoff },
+      ...(studentIds ? { studentId: { in: studentIds } } : {}),
+    },
+    take: 200,
+    select: {
+      id: true,
+      startedAt: true,
+      attempts: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+    },
+  });
+
+  let closed = 0;
+  for (const candidate of candidates) {
+    const lastActivity = candidate.attempts[0]?.createdAt ?? candidate.startedAt;
+    if (lastActivity >= cutoff) continue; // houve resposta recente: a criança ainda está jogando
+    const durationMs = Math.min(
+      Math.max(0, lastActivity.getTime() - candidate.startedAt.getTime()),
+      MAX_SESSION_MS,
+    );
+    // O filtro por status evita brigar com uma conclusão que aconteceu agora mesmo.
+    const result = await prisma.activitySession.updateMany({
+      where: { id: candidate.id, status: "IN_PROGRESS" },
+      data: { status: "ABANDONED", finishedAt: lastActivity, durationMs },
+    });
+    closed += result.count;
+  }
+  return closed;
 }

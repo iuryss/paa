@@ -2,7 +2,7 @@ import { decideAccess, roleHome } from "./rbac";
 
 describe("decideAccess", () => {
   describe("rotas públicas", () => {
-    it.each(["/", "/entrar", "/api/auth/session", "/api/auth/callback/adult", "/api/health", "/convite/abc", "/esqueci-senha", "/redefinir-senha/abc", "/privacidade", "/termo"])(
+    it.each(["/", "/entrar", "/api/auth/session", "/api/auth/callback/adult", "/api/health", "/convite/abc", "/esqueci-senha", "/redefinir-senha/abc", "/privacidade", "/termo", "/api/cron/sessoes"])(
       "libera %s sem login",
       (path) => {
         expect(decideAccess(path, null)).toEqual({ type: "allow" });

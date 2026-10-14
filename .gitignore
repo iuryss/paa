@@ -9,3 +9,7 @@ coverage
 next-env.d.ts
 .DS_Store
 .next-test
+e2e/.tmp
+playwright-report
+test-results
+.next-e2e
