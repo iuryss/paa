@@ -132,33 +132,20 @@ export function redisCredentials(env: Env = process.env): { url: string; token: 
 export function selectStore(
   env: Env = process.env,
   fetchImpl?: typeof fetch,
-): { store: RateLimitStore; backend: RateLimitBackend; redis: RateLimitStore | null } {
+): { store: RateLimitStore; backend: RateLimitBackend } {
   const memory = createMemoryStore();
   const credentials = redisCredentials(env);
   if (!credentials) {
     if (env.NODE_ENV === "production") {
       logger.warn("rate_limit.memory_in_production");
     }
-    return { store: memory, backend: "memory", redis: null };
+    return { store: memory, backend: "memory" };
   }
   const redis = createUpstashStore(credentials.url, credentials.token, fetchImpl);
-  return { store: withFallback(redis, memory), backend: "redis", redis };
+  return { store: withFallback(redis, memory), backend: "redis" };
 }
 
-const selected = selectStore();
-export const rateLimitBackend: RateLimitBackend = selected.backend;
-export const defaultStore: RateLimitStore = selected.store;
-
-/** O Redis configurado está respondendo? (usado no painel de verificação; null = não configurado) */
-export async function pingRedis(): Promise<boolean | null> {
-  if (!selected.redis) return null;
-  try {
-    await selected.redis.count("healthcheck");
-    return true;
-  } catch {
-    return false;
-  }
-}
+export const defaultStore: RateLimitStore = selectStore().store;
 
 // ───────────────────────── Limitador ─────────────────────────
 

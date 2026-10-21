@@ -102,14 +102,3 @@ test("professor convida um colega: o e-mail chega, a pessoa cria a conta e entra
 
   expect(await prisma.user.findUnique({ where: { email: "colega.nova@e2e.test" } })).toMatchObject({ role: "THERAPIST" });
 });
-
-test("o botão 'Enviar e-mail de teste' entrega o e-mail pelo SMTP configurado", async ({ page }) => {
-  const since = Date.now();
-  await loginAdult(page, TEACHER.email, TEACHER.password);
-  await page.goto("/professor/conta");
-  await expect(page.getByText(/SMTP configurado/)).toBeVisible();
-  await page.getByRole("button", { name: "Enviar e-mail de teste para mim" }).click();
-  await expect(page.getByText("Enviado!")).toBeVisible();
-  const mail = await waitForMail(TEACHER.email, "Teste de e-mail", since);
-  expect(mail.body).toContain("o envio de e-mails da Plataforma TEA está funcionando");
-});

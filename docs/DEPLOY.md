@@ -20,7 +20,7 @@ Funciona para qualquer destinatário e não custa nada. Serve para: "esqueci min
    | `AUTH_URL` | `https://SEU-PROJETO.vercel.app` (o endereço gratuito da Vercel serve; sem barra no fim) |
 
    `EMAIL_FROM` é opcional (o remetente padrão é a própria conta Gmail).
-5. Faça um **novo deploy** e, em *Minha conta*, clique em **Enviar e-mail de teste para mim**. Se falhar, a tela explica o motivo.
+5. Faça um **novo deploy** e teste com **Esqueci minha senha** na tela de entrada, usando o seu e-mail de professor. Se o e-mail não chegar, procure `password_reset.email_failed` nos logs da Vercel: o campo `code` diz o motivo (`smtp_auth` = senha de app errada).
 
 Limites e cuidados: o Gmail gratuito envia cerca de **500 e-mails por dia**, mais do que suficiente aqui. Os primeiros e-mails podem cair no **spam**: peça aos colegas para marcar "não é spam". O remetente é o próprio Gmail (as respostas chegam nele, o que é útil). Para o encarregado (DPO), `LEGAL_DPO_EMAIL` pode ser esse mesmo Gmail. Se um dia quiserem enviar com um endereço do domínio da escola, use `EMAIL_PROVIDER=smtp` com o servidor SMTP que o provedor de e-mail indicar (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` e `EMAIL_FROM`).
 
@@ -40,7 +40,7 @@ Problemas comuns: o campo *Nome* de muitos painéis já acrescenta o domínio so
 Quando a criança larga a atividade no meio, a sessão fica "em andamento". Depois de 30 minutos sem resposta ela passa a **interrompida** e aparece para o professor (separada dos gráficos de autonomia). Isso acontece de dois jeitos: ao abrir o painel ou o relatório, e por uma **limpeza diária** (Vercel Cron, definida em `vercel.json`, todo dia às 06:00 UTC).
 
 1. Defina `CRON_SECRET` na Vercel com 16+ caracteres (`node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"`). A Vercel envia esse valor sozinha como `Authorization: Bearer ...` ao chamar `/api/cron/sessoes`.
-2. Sem `CRON_SECRET`, a rota recusa tudo (503) e a *Verificação do sistema* mostra "atenção". O restante continua funcionando.
+2. Sem `CRON_SECRET`, a rota recusa tudo (503). O restante continua funcionando. Para conferir, veja em *Vercel → Settings → Cron Jobs* se a execução retornou 200.
 3. Se a criança voltar a uma sessão interrompida e responder, a sessão é reaberta sem perder nada.
 
 ## Redis (limite de tentativas de login)
@@ -49,9 +49,9 @@ O bloqueio após 5 falhas (PIN do aluno, senha do professor, troca de senha, ped
 
 1. Na Vercel: **Storage → Create → Upstash (Redis)** e conecte ao projeto. A integração injeta `KV_REST_API_URL` e `KV_REST_API_TOKEN` (ou `UPSTASH_REDIS_REST_URL`/`_TOKEN`): o sistema aceita as duas formas.
 2. Faça um novo deploy (variáveis novas só valem em deploys novos).
-3. Confirme em **Minha conta → Verificação do sistema**: "Limite de tentativas de login: ok, Redis (compartilhado entre todas as instâncias)".
+3. Para conferir: erre o PIN de um aluno de teste 5 vezes e veja a mensagem de bloqueio; o log `auth.blocked` aparece na Vercel e a chave aparece no painel do Upstash.
 
-Se o Redis cair, o login **não** fica fora do ar: o sistema usa a memória como reserva (proteção reduzida por instância), registra `rate_limit.redis_unavailable` no log e o painel mostra "atenção". Os identificadores (e-mail, código do aluno) vão ao Redis apenas como hash SHA-256.
+Se o Redis cair, o login **não** fica fora do ar: o sistema usa a memória como reserva (proteção reduzida por instância), registra `rate_limit.redis_unavailable` no log. Os identificadores (e-mail, código do aluno) vão ao Redis apenas como hash SHA-256.
 
 ## Antes de qualquer deploy (checklist)
 

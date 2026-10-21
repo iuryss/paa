@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { readEmailConfig } from "./config";
 import { sendEmail, type EmailMessage } from "./send";
-import { escapeHtml, invitationEmail, passwordResetEmail, testEmail } from "./templates";
+import { escapeHtml, invitationEmail, passwordResetEmail } from "./templates";
 
 const message: EmailMessage = {
   to: "ana@escola.com",
@@ -67,13 +67,6 @@ describe("templates", () => {
     expect(mail.text).toContain("Beto convidou você");
     expect(mail.text).toContain("7 dias");
     expect(mail.html).toContain(link);
-  });
-
-  it("e-mail de teste não contém link nem ação", () => {
-    const mail = testEmail({ to: "ana@escola.com", name: "Ana" });
-    expect(mail.subject).toContain("Teste");
-    expect(mail.text).toContain("Nenhuma ação é necessária");
-    expect(mail.text).not.toMatch(/https?:/);
   });
 
   it("escapa HTML em nomes e links (sem injeção no corpo do e-mail)", () => {

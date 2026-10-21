@@ -17,7 +17,6 @@ test.describe("quem não entrou", () => {
 
     expect((await request.post("/api/professor/alunos", { data: {} })).status()).toBe(401);
     expect((await request.get(`/api/professor/alunos/${seed.studentId}/exportar`)).status()).toBe(401);
-    expect((await request.post("/api/conta/email-teste")).status()).toBe(401);
     expect((await request.get("/api/auth/session")).ok()).toBe(true);
   });
 
@@ -55,7 +54,6 @@ test.describe("papéis", () => {
     await expect(page).toHaveURL(/\/aluno$/);
 
     expect((await page.request.post("/api/professor/alunos", { data: {} })).status()).toBe(403);
-    expect((await page.request.post("/api/conta/email-teste")).status()).toBe(403);
     expect((await page.request.get(`/api/professor/alunos/${seed.studentId}/exportar`)).status()).toBe(403);
   });
 
