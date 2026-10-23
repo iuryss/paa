@@ -23,13 +23,16 @@ test("professor cria uma atividade pelo formulário, testa, publica, atribui e o
   await page.getByLabel("Opção errada 1", { exact: true }).fill("k");
   await page.getByLabel("Opção errada 2", { exact: true }).fill("g");
   await page.getByLabel(/Publicada/).check();
+  await page.getByRole("radio", { name: "Só formas" }).check();
 
   // Pré-visualização: roda a atividade de verdade, sem gravar nada.
   await page.getByRole("button", { name: "Pré-visualizar" }).click();
   const preview = page.getByRole("region", { name: "Pré-visualização" });
   await expect(preview.getByText("Modo de teste")).toBeVisible();
   await expect(preview.getByRole("heading", { level: 1, name: "Qual é a letra c pequena?" })).toBeVisible();
-  await preview.getByRole("button", { name: "c", exact: true }).click();
+  // "Só formas": a opção diz a forma, sem cor.
+  await expect(preview.getByRole("button", { name: /^c, (círculo|triângulo|quadrado|estrela)$/ })).toBeVisible();
+  await preview.getByRole("button", { name: /^c, / }).click();
   await expect(preview.getByRole("status").filter({ hasText: "Isso!" })).toBeVisible();
   expect(await prisma.activitySession.count()).toBe(0);
   await page.getByRole("button", { name: "Fechar pré-visualização" }).click();
@@ -39,7 +42,7 @@ test("professor cria uma atividade pelo formulário, testa, publica, atribui e o
   await expect(page.getByRole("heading", { level: 1, name: "Letras do C" })).toBeVisible();
 
   const saved = await prisma.activity.findFirst({ where: { title: "Letras do C" } });
-  expect(saved).toMatchObject({ published: true, module: "GRAFIA", authorId: seed.teacherId });
+  expect(saved).toMatchObject({ published: true, module: "GRAFIA", authorId: seed.teacherId, markerStyle: "FORMAS" });
   const content = saved!.content as { items: { correctId: string; options: { label: string }[] }[] };
   expect(content.items[0]!.correctId).toBe("l-c");
   expect(content.items[0]!.options.map((o) => o.label).sort()).toEqual(["c", "g", "k"]);
@@ -57,6 +60,7 @@ test("professor cria uma atividade pelo formulário, testa, publica, atribui e o
   await kid.goto("/aluno/atividades");
   await kid.getByRole("link", { name: "Letras do C" }).click();
   await expect(kid.getByRole("heading", { level: 1, name: "Qual é a letra c pequena?" })).toBeVisible();
+  await expect(kid.locator("[class*='fill-marker-']")).toHaveCount(0); // só formas, sem cor
   await option(kid, "c").click();
   await expect(kid.getByRole("status").filter({ hasText: "Isso!" })).toBeVisible();
   await child.close();

@@ -44,5 +44,15 @@ export async function openActivity(page: Page, title: string) {
   await page.getByRole("link", { name: title }).click();
 }
 
-export const option = (page: Page, name: string) =>
-  page.getByRole("group", { name: "Respostas" }).getByRole("button", { name, exact: true });
+/** O nome acessível da opção é "rótulo, marcador" (ex.: "a, triângulo amarelo"). */
+export const option = (page: Page, label: string) =>
+  page
+    .getByRole("group", { name: "Respostas" })
+    .getByRole("button", { name: new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}, `) });
+
+/** O marcador da opção na tela, como a dica fala dele: "o triângulo amarelo", "a estrela roxa". */
+export async function markerOf(page: Page, label: string): Promise<string> {
+  const name = (await option(page, label).getAttribute("aria-label")) ?? "";
+  const marker = name.split(", ")[1]?.split(".")[0] ?? "";
+  return `${marker.startsWith("estrela") || marker.startsWith("cor ") ? "a" : "o"} ${marker}`;
+}

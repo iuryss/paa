@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { prisma, resetAndSeed, STUDENT, type Seeded } from "./helpers/data";
-import { expectStudentHome, loginStudent, openActivity, option } from "./helpers/ui";
+import { expectStudentHome, loginStudent, markerOf, openActivity, option } from "./helpers/ui";
 
 let seed: Seeded;
 test.beforeAll(async () => {
@@ -50,19 +50,27 @@ test("aluno entra e faz a atividade de Grafia do começo ao fim, sem nunca ver a
     .toEqual({ status: "COMPLETED", total: 3, redirects: 1, attempts: 3 });
 });
 
-test("a dica visual aparece depois de duas respostas diferentes e fica registrada como ajuda", async ({ page }) => {
+test("depois de duas respostas diferentes a dica aponta o marcador; na terceira, destaca", async ({ page }) => {
   await prisma.activitySession.deleteMany({});
   await loginStudent(page, STUDENT.code, STUDENT.pin);
   await openActivity(page, "Letras");
 
+  // Cada opção tem um marcador (forma + cor) desenhado na tela.
+  const group = page.getByRole("group", { name: "Respostas" });
+  await expect(group.locator("button svg[data-marker]")).toHaveCount(3);
+  const marker = await markerOf(page, "a");
+
   await option(page, "o").click();
   await option(page, "e").click();
-  await expect(page.getByText("Olhe a opção marcada.")).toBeVisible();
-  // A opção destacada ganha "Dica: esta opção" no nome acessível (leitor de tela).
-  const highlighted = page.getByRole("button", { name: "a Dica: esta opção" });
-  await expect(highlighted).toBeVisible();
+  await expect(page.getByText(`Procure ${marker}.`)).toBeVisible();
+  await expect(option(page, "a")).not.toHaveAccessibleName(/Dica: esta opção/);
 
-  await highlighted.click();
+  await option(page, "o").click();
+  await expect(page.getByText(`Toque n${marker}, que está em destaque.`)).toBeVisible();
+  // A opção destacada ganha "Dica: esta opção" no nome acessível (leitor de tela).
+  await expect(option(page, "a")).toHaveAccessibleName(/Dica: esta opção$/);
+
+  await option(page, "a").click();
   await expect(page.getByRole("status").filter({ hasText: "Isso!" })).toBeVisible();
 
   await expect
@@ -73,17 +81,21 @@ test("a dica visual aparece depois de duas respostas diferentes e fica registrad
     .toEqual([
       [false, "NONE"],
       [false, "NONE"],
+      [false, "VISUAL_HINT"],
       [true, "VISUAL_HINT"],
     ]);
 });
 
-test("o botão Dica mostra o texto primeiro e depois destaca a resposta", async ({ page }) => {
+test("o botão Dica sobe a escada: texto do professor → marcador → destaque", async ({ page }) => {
   await loginStudent(page, STUDENT.code, STUDENT.pin);
   await openActivity(page, "Letras");
+  const marker = await markerOf(page, "a");
   await page.getByRole("button", { name: "Dica" }).click();
   await expect(page.getByText("A letra pequena parece com a grande.")).toBeVisible();
   await page.getByRole("button", { name: "Dica" }).click();
-  await expect(page.getByText("Olhe a opção marcada.")).toBeVisible();
+  await expect(page.getByText(`Procure ${marker}.`)).toBeVisible();
+  await page.getByRole("button", { name: "Dica" }).click();
+  await expect(option(page, "a")).toHaveAccessibleName(/Dica: esta opção$/);
 });
 
 test("Localização: mapa com 'Você' no centro, ordem fixa Norte/Sul/Leste/Oeste", async ({ page }) => {
