@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_MARKER_STYLE, MARKER_STYLES } from "@/lib/activities/markers";
 import { sanitizeText } from "@/lib/sanitize";
 
 export const SUPPORTED_MODULES = ["LOCALIZACAO", "GRAFIA", "MATEMATICA"] as const;
@@ -186,6 +187,7 @@ export const createActivitySchema = z
     title: text(80),
     instruction: text(120),
     content: z.unknown(),
+    markerStyle: z.enum(MARKER_STYLES).default(DEFAULT_MARKER_STYLE),
     published: z.boolean().default(false),
   })
   .strict()
@@ -206,6 +208,8 @@ export const updateActivitySchema = z
     instruction: text(120).optional(),
     difficulty: z.enum(["INICIAL", "INTERMEDIARIO", "AVANCADO"]).optional(),
     published: z.boolean().optional(),
+    /** Só muda a apresentação das dicas: pode mudar mesmo com sessões gravadas. */
+    markerStyle: z.enum(MARKER_STYLES).optional(),
     content: z.unknown().optional(),
   })
   .strict()

@@ -103,14 +103,19 @@ describe("updateActivity", () => {
     expect(m.update).not.toHaveBeenCalled();
   });
 
-  it("atualiza título, publicação e dificuldade mesmo com sessões", async () => {
+  it("atualiza título, publicação, dificuldade e estilo das dicas mesmo com sessões", async () => {
     owned(5);
     await expect(
-      updateActivity("prof1", "act1", { title: "Novo", published: true, difficulty: "AVANCADO" }),
+      updateActivity("prof1", "act1", {
+        title: "Novo",
+        published: true,
+        difficulty: "AVANCADO",
+        markerStyle: "CORES",
+      }),
     ).resolves.toEqual({ ok: true });
     expect(m.update).toHaveBeenCalledWith({
       where: { id: "act1" },
-      data: { title: "Novo", published: true, difficulty: "AVANCADO" },
+      data: { title: "Novo", published: true, difficulty: "AVANCADO", markerStyle: "CORES" },
     });
     expect(m.audit).toHaveBeenCalledWith({ data: { actorId: "prof1", action: "activity.update", targetId: "act1" } });
   });
@@ -141,7 +146,14 @@ describe("updateActivity", () => {
 
 describe("duplicateActivity", () => {
   it("copia atividade própria ou publicada como RASCUNHO do adulto", async () => {
-    m.findFirst.mockResolvedValue({ module: "GRAFIA", difficulty: "INICIAL", title: "Letras", instruction: "Ache", content });
+    m.findFirst.mockResolvedValue({
+      module: "GRAFIA",
+      difficulty: "INICIAL",
+      title: "Letras",
+      instruction: "Ache",
+      content,
+      markerStyle: "FORMAS",
+    });
     m.create.mockResolvedValue({ id: "copia1" });
 
     await expect(duplicateActivity("prof1", "act1")).resolves.toEqual({ ok: true, id: "copia1" });
@@ -154,6 +166,7 @@ describe("duplicateActivity", () => {
       published: false,
       authorId: "prof1",
       content,
+      markerStyle: "FORMAS",
     });
   });
 

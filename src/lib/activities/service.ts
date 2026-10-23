@@ -1,4 +1,4 @@
-import type { ActivityModule, Difficulty, Prisma } from "@prisma/client";
+import type { ActivityModule, Difficulty, MarkerStyle, Prisma } from "@prisma/client";
 import { fromContent, type EditorItem } from "@/lib/activities/editor-model";
 import { prisma } from "@/lib/db";
 import {
@@ -26,6 +26,7 @@ export async function createActivity(
       title: input.title,
       instruction: input.instruction,
       content,
+      markerStyle: input.markerStyle,
       published: input.published,
       authorId,
     },
@@ -132,6 +133,7 @@ export interface EditableActivity {
   difficulty: Difficulty;
   title: string;
   instruction: string;
+  markerStyle: MarkerStyle;
   published: boolean;
   items: EditorItem[];
   /** Com sessões gravadas, o conteúdo fica travado para não distorcer os gráficos. */
@@ -151,6 +153,7 @@ export async function getActivityForEdit(
       difficulty: true,
       title: true,
       instruction: true,
+      markerStyle: true,
       published: true,
       content: true,
       _count: { select: { sessions: true } },
@@ -167,6 +170,7 @@ export async function getActivityForEdit(
     difficulty: row.difficulty,
     title: row.title,
     instruction: row.instruction,
+    markerStyle: row.markerStyle,
     published: row.published,
     items: fromContent(row.module, parsed.content),
     sessionCount: row._count.sessions,
@@ -193,6 +197,7 @@ export async function updateActivity(
   if (input.instruction !== undefined) data.instruction = input.instruction;
   if (input.difficulty !== undefined) data.difficulty = input.difficulty;
   if (input.published !== undefined) data.published = input.published;
+  if (input.markerStyle !== undefined) data.markerStyle = input.markerStyle;
 
   if ("content" in input) {
     if (activity._count.sessions > 0) return { ok: false, code: "locked" };
@@ -216,7 +221,14 @@ export async function duplicateActivity(
 ): Promise<ServiceResult<{ id: string }>> {
   const source = await prisma.activity.findFirst({
     where: { id: activityId, OR: [{ authorId: adultId }, { published: true }] },
-    select: { module: true, difficulty: true, title: true, instruction: true, content: true },
+    select: {
+      module: true,
+      difficulty: true,
+      title: true,
+      instruction: true,
+      content: true,
+      markerStyle: true,
+    },
   });
   if (!source) return { ok: false, code: "not_found" };
 
@@ -227,6 +239,7 @@ export async function duplicateActivity(
       title: `Cópia de ${source.title}`.slice(0, 80),
       instruction: source.instruction,
       content: source.content as Prisma.InputJsonValue,
+      markerStyle: source.markerStyle,
       published: false,
       authorId: adultId,
     },

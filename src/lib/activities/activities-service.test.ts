@@ -93,12 +93,14 @@ describe("createActivity", () => {
         title: "Letras",
         instruction: "Ache",
         content: dirty,
+        markerStyle: "FORMAS",
         published: true,
       }),
     ).resolves.toEqual({ id: "novo" });
 
     const data = m.activityCreate.mock.calls[0]?.[0].data;
     expect(data.content.items[0].prompt).toBe("Qual letra?");
+    expect(data.markerStyle).toBe("FORMAS");
     expect(data.authorId).toBe("prof1");
     expect(m.auditCreate).toHaveBeenCalledWith({
       data: { actorId: "prof1", action: "activity.create", targetId: "novo" },
