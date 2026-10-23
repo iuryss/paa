@@ -225,3 +225,38 @@ describe("Perguntas livres", () => {
     expect(addAnswer(four).answers).toHaveLength(4);
   });
 });
+
+describe("Escrever o nome", () => {
+  it("começa com o pedido pronto, 3 letras extras, maiúsculas e modelo visível", () => {
+    expect(emptyItem("NOME")).toMatchObject({ prompt: "Escreva seu nome", nameExtra: 3, nameCase: "MAIUSCULAS", nameModel: true });
+  });
+
+  it("toContent gera só a configuração, aceita pelo schema; ida e volta preserva", () => {
+    const item = { ...emptyItem("NOME"), nameExtra: 5, nameCase: "COMO_CADASTRADO" as const, nameModel: false };
+    const content = toContent("NOME", [item]);
+    expect(content).toEqual({
+      items: [{ key: "nome", prompt: "Escreva seu nome", extraLetters: 5, letterCase: "COMO_CADASTRADO", showModel: false }],
+    });
+    const parsed = parseActivityContent("NOME", content);
+    expect(parsed.success && parsed.name).toMatchObject({ extraLetters: 5, letterCase: "COMO_CADASTRADO" });
+    expect(parsed.success && parsed.items).toEqual([]);
+    expect(fromContent("NOME", content)[0]).toMatchObject({ nameExtra: 5, nameCase: "COMO_CADASTRADO", nameModel: false });
+  });
+
+  it("valida o pedido e a quantidade de letras extras", () => {
+    expect(validateItems("NOME", [emptyItem("NOME")])).toEqual([]);
+    expect(validateItems("NOME", [{ ...emptyItem("NOME"), prompt: " " }])).toContain(
+      "Escreva o pedido para a criança (ex.: Escreva seu nome).",
+    );
+    expect(validateItems("NOME", [{ ...emptyItem("NOME"), nameExtra: 9 }])).toContain("Use de 0 a 6 letras extras.");
+    expect(validateItems("NOME", [emptyItem("NOME"), emptyItem("NOME")])).toContain("Esta atividade tem uma configuração só.");
+  });
+
+  it("o schema recusa letras extras demais, chave diferente e dois itens", () => {
+    const ok = toContent("NOME", [emptyItem("NOME")]) as { items: Record<string, unknown>[] };
+    expect(contentSchemas.NOME.safeParse(ok).success).toBe(true);
+    expect(contentSchemas.NOME.safeParse({ items: [{ ...ok.items[0], extraLetters: 7 }] }).success).toBe(false);
+    expect(contentSchemas.NOME.safeParse({ items: [{ ...ok.items[0], key: "outro" }] }).success).toBe(false);
+    expect(contentSchemas.NOME.safeParse({ items: [ok.items[0], ok.items[0]] }).success).toBe(false);
+  });
+});

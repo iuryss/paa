@@ -46,6 +46,8 @@ enum ActivityModule {
   CIENCIAS
   /// Perguntas livres: o professor escreve a pergunta, o apoio, as respostas e marca a certa.
   LIVRE
+  /// Escrever o próprio nome (apelido) com letras soltas. O conteúdo guarda só a configuração.
+  NOME
 }
 
 /// Marcadores das respostas e das dicas (escolhido pelo professor em cada atividade).
