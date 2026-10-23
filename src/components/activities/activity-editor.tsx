@@ -10,13 +10,17 @@ import { Card } from "@/components/ui/card";
 import { Feedback } from "@/components/ui/feedback";
 import { Input, Label } from "@/components/ui/input";
 import {
+  addAnswer,
   DIRECTION_LABEL,
   emptyItem,
   ICON_LABEL,
+  MAX_ANSWERS,
   MAX_DISTRACTORS,
   MAX_ITEMS,
+  MIN_ANSWERS,
   move,
   PIECE_ICONS,
+  removeAnswer,
   toContent,
   validateItems,
   type EditorItem,
@@ -34,12 +38,136 @@ import { cn } from "@/lib/utils";
 import {
   contentSchemas,
   DIRECTIONS,
+  MAX_SUPPORT_TEXT,
   parseActivityContent,
   type SupportedModule,
 } from "@/lib/validation/activities";
 
 const SELECT_CLASS =
   "min-h-target w-full rounded-[20px] border-2 border-border bg-surface px-4 text-body text-ink disabled:bg-disabled-bg disabled:text-disabled-ink";
+
+const TEXTAREA_CLASS =
+  "w-full rounded-[20px] border-2 border-border bg-surface px-4 py-3 text-body text-ink disabled:bg-disabled-bg disabled:text-disabled-ink";
+
+function IconSelect({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: EditorItem["supportIcon"];
+  onChange: (value: EditorItem["supportIcon"]) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={id}>{label}</Label>
+      <select id={id} value={value} className={SELECT_CLASS} onChange={(e) => onChange(e.target.value as EditorItem["supportIcon"])}>
+        <option value="">Sem figura</option>
+        {PIECE_ICONS.map((n) => (
+          <option key={n} value={n}>{ICON_LABEL[n]}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/** Pergunta livre: apoio (texto e figura) e TODAS as respostas, com a certa marcada. */
+function FreeItemFields({
+  id,
+  item,
+  onChange,
+  onUpdate,
+}: {
+  id: string;
+  item: EditorItem;
+  onChange: (patch: Partial<EditorItem>) => void;
+  onUpdate: (fn: (item: EditorItem) => EditorItem) => void;
+}) {
+  const setAnswer = (j: number, patch: Partial<EditorItem["answers"][number]>) =>
+    onChange({ answers: item.answers.map((a, k) => (k === j ? { ...a, ...patch } : a)) });
+
+  return (
+    <>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor={`${id}-support`}>Texto de apoio (opcional)</Label>
+        <textarea
+          id={`${id}-support`}
+          rows={3}
+          maxLength={MAX_SUPPORT_TEXT}
+          value={item.supportText}
+          aria-describedby={`${id}-support-hint`}
+          className={TEXTAREA_CLASS}
+          onChange={(e) => onChange({ supportText: e.target.value })}
+        />
+        <p id={`${id}-support-hint`} className="text-label text-ink-muted">
+          Uma historinha ou explicação curta, mostrada acima das respostas ({item.supportText.length} de{" "}
+          {MAX_SUPPORT_TEXT} letras).
+        </p>
+      </div>
+      <IconSelect
+        id={`${id}-support-icon`}
+        label="Figura de apoio"
+        value={item.supportIcon}
+        onChange={(supportIcon) => onChange({ supportIcon })}
+      />
+
+      <fieldset className="flex flex-col gap-4">
+        <legend className="mb-1 text-label">Respostas (de {MIN_ANSWERS} a {MAX_ANSWERS}): marque a certa</legend>
+        {item.answers.map((answer, j) => {
+          const correct = item.correctIndex === j;
+          return (
+            <div
+              key={j}
+              role="group"
+              aria-label={`Resposta ${j + 1}`}
+              className={cn(
+                "flex flex-col gap-4 rounded-[20px] border-2 p-4",
+                correct ? "border-success-border bg-success-bg" : "border-border bg-surface",
+              )}
+            >
+              <label className="flex items-center gap-3 text-label">
+                <input
+                  type="radio"
+                  name={`${id}-correct`}
+                  checked={correct}
+                  aria-label={`Resposta ${j + 1}: esta é a certa`}
+                  onChange={() => onChange({ correctIndex: j })}
+                  className="size-6 shrink-0"
+                />
+                Esta é a certa
+              </label>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor={`${id}-a${j}`}>Texto da resposta {j + 1}</Label>
+                <Input id={`${id}-a${j}`} value={answer.label} maxLength={40} onChange={(e) => setAnswer(j, { label: e.target.value })} />
+              </div>
+              <IconSelect
+                id={`${id}-a${j}-icon`}
+                label={`Figura da resposta ${j + 1}`}
+                value={answer.icon}
+                onChange={(icon) => setAnswer(j, { icon })}
+              />
+              <Button
+                icon={Trash2}
+                className="self-start"
+                disabled={item.answers.length <= MIN_ANSWERS}
+                onClick={() => onUpdate((it) => removeAnswer(it, j))}
+              >
+                Remover resposta {j + 1}
+              </Button>
+            </div>
+          );
+        })}
+        {item.answers.length < MAX_ANSWERS ? (
+          <Button icon={Plus} className="self-start" onClick={() => onUpdate(addAnswer)}>
+            Adicionar resposta
+          </Button>
+        ) : null}
+      </fieldset>
+    </>
+  );
+}
 
 const DIFFICULTIES = [
   { value: "INICIAL", label: "Inicial" },
@@ -400,6 +528,15 @@ export function ActivityEditor({ module, activityId, initial, sessionCount = 0 }
                         </p>
                         <DistractorList idPrefix={`${id}-d`} label="Opção errada" values={item.distractors} disabled={locked} onChange={(distractors) => patchItem(i, { distractors })} />
                       </>
+                    ) : null}
+
+                    {module === "LIVRE" ? (
+                      <FreeItemFields
+                        id={id}
+                        item={item}
+                        onChange={(patch) => patchItem(i, patch)}
+                        onUpdate={(fn) => setItems((l) => l.map((it, k) => (k === i ? fn(it) : it)))}
+                      />
                     ) : null}
                   </fieldset>
                 </Card>

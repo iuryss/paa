@@ -180,6 +180,57 @@ describe("ActivityEditor — itens", () => {
     expect(item).toMatchObject({ position: "oeste", correctId: "oeste", piece: { label: "Escola", icon: "escola" } });
     expect(item.options.map((o: { id: string }) => o.id)).toEqual(["norte", "sul", "leste", "oeste"]);
   });
+
+  it("Perguntas livres: o professor escreve o apoio, as respostas e marca a certa", async () => {
+    reply(201, { id: "livre12345" });
+    const user = userEvent.setup();
+    setup("LIVRE");
+    await fillMeta(user);
+    await user.type(screen.getByLabelText("Pergunta"), "Qual bicho late?");
+    await user.type(screen.getByLabelText("Texto de apoio (opcional)"), "Na casa da Ana tem um bicho.");
+    expect(screen.getByText(/28 de 300 letras/)).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Figura de apoio"), "casa");
+
+    // Começa com 2 respostas; a 1ª vem marcada e não dá para ficar com menos de 2.
+    expect(screen.getByRole("radio", { name: "Resposta 1: esta é a certa" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Remover resposta 1" })).toBeDisabled();
+    await user.type(screen.getByLabelText("Texto da resposta 1"), "Gato");
+    await user.type(screen.getByLabelText("Texto da resposta 2"), "Cachorro");
+    await user.selectOptions(screen.getByLabelText("Figura da resposta 2"), "cachorro");
+    await user.click(screen.getByRole("button", { name: "Adicionar resposta" }));
+    await user.type(screen.getByLabelText("Texto da resposta 3"), "Peixe");
+    await user.click(screen.getByRole("radio", { name: "Resposta 2: esta é a certa" }));
+    await user.click(screen.getByRole("button", { name: "Adicionar resposta" }));
+    expect(screen.queryByRole("button", { name: "Adicionar resposta" })).not.toBeInTheDocument(); // máximo 4
+    await user.click(screen.getByRole("button", { name: "Remover resposta 4" }));
+
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body);
+    expect(body.module).toBe("LIVRE");
+    expect(body.content.items[0]).toMatchObject({
+      prompt: "Qual bicho late?",
+      support: "Na casa da Ana tem um bicho.",
+      supportIcon: "casa",
+      correctId: "o-cachorro",
+      options: [
+        { id: "o-gato", label: "Gato" },
+        { id: "o-cachorro", label: "Cachorro", icon: "cachorro" },
+        { id: "o-peixe", label: "Peixe" },
+      ],
+    });
+  });
+
+  it("Perguntas livres: resposta vazia é apontada antes de salvar", async () => {
+    const user = userEvent.setup();
+    setup("LIVRE");
+    await fillMeta(user);
+    await user.type(screen.getByLabelText("Pergunta"), "Qual bicho late?");
+    await user.type(screen.getByLabelText("Texto da resposta 1"), "Gato");
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Item 1: escreva a resposta 2 (ou remova-a).");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("ActivityEditor — editar", () => {
@@ -291,5 +342,8 @@ describe("ActivityEditor — acessibilidade", () => {
     b.unmount();
     const c = setup("LOCALIZACAO", { activityId: "act1234567", sessionCount: 2, initial: { ...filled, items: [emptyItem("LOCALIZACAO")] } });
     expect(await axe(c.container)).toHaveNoViolations();
+    c.unmount();
+    const d = setup("LIVRE", { initial: { ...filled, items: [emptyItem("LIVRE")] } });
+    expect(await axe(d.container)).toHaveNoViolations();
   });
 });

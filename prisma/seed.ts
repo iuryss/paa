@@ -116,6 +116,52 @@ async function main() {
         items: [sum("conta-3", 3, 0, [2, 4]), sum("conta-2-1", 2, 1, [2, 4]), sum("conta-3-2", 3, 2, [4, 6])],
       },
     },
+    {
+      id: "seed-livre",
+      module: "LIVRE" as const,
+      title: "Bichos e sentimentos",
+      instruction: "Leia e escolha a resposta",
+      content: {
+        items: [
+          {
+            key: "bicho-late",
+            prompt: "Qual bicho faz au-au?",
+            hint: "Ele é amigo das pessoas e balança o rabo.",
+            support: "Na casa da Ana mora um bicho. Ele late quando alguém chega.",
+            supportIcon: "casa",
+            options: [
+              { id: "o-gato", label: "Gato", icon: "gato" },
+              { id: "o-cachorro", label: "Cachorro", icon: "cachorro" },
+              { id: "o-peixe", label: "Peixe", icon: "peixe" },
+            ],
+            correctId: "o-cachorro",
+          },
+          {
+            key: "ana-feliz",
+            prompt: "Como a Ana se sente?",
+            hint: "Ela sorriu bem grande.",
+            support: "A Ana ganhou um abraço da vovó. Ela sorriu bem grande.",
+            supportIcon: "coracao",
+            options: [
+              { id: "o-feliz", label: "Feliz", icon: "feliz" },
+              { id: "o-triste", label: "Triste", icon: "triste" },
+            ],
+            correctId: "o-feliz",
+          },
+          {
+            key: "chuva",
+            prompt: "O que cai do céu quando chove?",
+            supportIcon: "nuvem",
+            options: [
+              { id: "o-agua", label: "Água", icon: "agua" },
+              { id: "o-sol", label: "Sol", icon: "sol" },
+              { id: "o-leite", label: "Leite", icon: "leite" },
+            ],
+            correctId: "o-agua",
+          },
+        ],
+      },
+    },
   ];
 
   for (const a of activities) {
@@ -132,10 +178,12 @@ async function main() {
   }
 
   // Sessões de demonstração (só dev): 8 sessões em ~2 semanas em que o aluno ganha autonomia.
+  // A atividade livre fica sem sessões, para o professor poder editá-la (sessões travam o conteúdo).
   await prisma.activitySession.deleteMany({ where: { id: { startsWith: "seed-sess-" } } });
   const DAY = 24 * 60 * 60 * 1000;
+  const withSessions = activities.filter((a) => a.module !== "LIVRE");
   for (let i = 0; i < 8; i++) {
-    const activity = activities[i % activities.length]!;
+    const activity = withSessions[i % withSessions.length]!;
     const keys = (activity.content.items as { key: string }[]).map((it) => it.key);
     const independentItems = Math.min(keys.length, Math.floor(i / 2));
     const attempts: { itemKey: string; correct: boolean; helpLevel: "NONE" | "VERBAL_HINT"; elapsedMs: number; attemptNo: number }[] = [];
@@ -169,7 +217,7 @@ async function main() {
     });
   }
 
-  console.log("Seed concluído (professor, aluno, 3 atividades e 8 sessões de demonstração).");
+  console.log("Seed concluído (professor, aluno, 4 atividades e 8 sessões de demonstração).");
 }
 
 main()

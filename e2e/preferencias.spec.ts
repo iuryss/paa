@@ -85,3 +85,20 @@ test("o anel de foco é visível em botões e campos (nunca outline removido sem
   const shadow = await field.evaluate((el) => getComputedStyle(el).boxShadow);
   expect(shadow).not.toBe("none");
 });
+
+test("logo depois de entrar, a tela já usa o perfil do aluno (sem precisar recarregar)", async ({ page }) => {
+  await prisma.sensoryProfile.update({ where: { userId: seed.studentId }, data: { theme: "FOCO" } });
+  await loginStudent(page, STUDENT.code, STUDENT.pin);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "foco");
+
+  // Só cliques (navegação sem recarregar): o estado do React precisa acompanhar o <html>.
+  await page.getByRole("link", { name: "Atividades" }).click();
+  await page.getByRole("link", { name: "Letras" }).click();
+  await expect(page.getByRole("group", { name: "Respostas" })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "foco");
+  // Tema Foco: marcadores só com forma, nenhuma cor.
+  await expect(page.locator("[class*='fill-marker-']")).toHaveCount(0);
+
+  await page.goto("/preferencias");
+  await expect(page.getByRole("radio", { name: /Foco/ })).toBeChecked();
+});

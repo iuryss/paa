@@ -1,8 +1,10 @@
 import { contentSchemas, parseActivityContent } from "@/lib/validation/activities";
 import {
+  addAnswer,
   emptyItem,
   fromContent,
   move,
+  removeAnswer,
   toContent,
   validateItems,
   type EditorItem,
@@ -143,5 +145,83 @@ describe("move", () => {
     expect(move(list, 0, -1)).toBe(list);
     expect(move(list, 1, 3)).toBe(list);
     expect(list).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("Perguntas livres", () => {
+  const livre = (over: Partial<EditorItem> = {}): EditorItem => ({
+    ...emptyItem("LIVRE"),
+    prompt: "Qual bicho late?",
+    hint: "Ele é amigo das pessoas.",
+    supportText: "Na casa da Ana tem um bicho que faz au-au.",
+    supportIcon: "casa",
+    answers: [
+      { label: "Gato", icon: "gato" },
+      { label: "Cachorro", icon: "cachorro" },
+      { label: "Peixe", icon: "" },
+    ],
+    correctIndex: 1,
+    ...over,
+  });
+
+  it("começa com 2 respostas vazias e a 1ª marcada como certa", () => {
+    expect(emptyItem("LIVRE")).toMatchObject({ answers: [{ label: "" }, { label: "" }], correctIndex: 0 });
+  });
+
+  it("toContent: a certa é a marcada pelo professor, com apoio e pictogramas", () => {
+    const content = toContent("LIVRE", [livre()]);
+    expect(contentSchemas.LIVRE.safeParse(content).success).toBe(true);
+    const r = parseActivityContent("LIVRE", content);
+    expect(r.success && r.items[0]).toMatchObject({
+      correctId: "o-cachorro",
+      options: [
+        { id: "o-gato", label: "Gato", icon: "gato" },
+        { id: "o-cachorro", label: "Cachorro", icon: "cachorro" },
+        { id: "o-peixe", label: "Peixe" },
+      ],
+      stimulus: { kind: "free", text: "Na casa da Ana tem um bicho que faz au-au.", icon: "casa" },
+    });
+  });
+
+  it("sem apoio, o estímulo não tem texto nem figura", () => {
+    const r = parseActivityContent("LIVRE", toContent("LIVRE", [livre({ supportText: " ", supportIcon: "" })]));
+    expect(r.success && r.items[0]?.stimulus).toEqual({ kind: "free" });
+  });
+
+  it("ida e volta: fromContent(toContent(x)) devolve o mesmo formulário", () => {
+    const item = livre();
+    const [back] = fromContent("LIVRE", toContent("LIVRE", [item]));
+    expect(back).toMatchObject({
+      supportText: item.supportText,
+      supportIcon: "casa",
+      answers: item.answers,
+      correctIndex: 1,
+      hint: item.hint,
+    });
+  });
+
+  it("valida respostas vazias, repetidas e a quantidade", () => {
+    expect(validateItems("LIVRE", [livre()])).toEqual([]);
+    expect(validateItems("LIVRE", [livre({ answers: [{ label: "Gato", icon: "" }, { label: " ", icon: "" }], correctIndex: 0 })]))
+      .toContain("Item 1: escreva a resposta 2 (ou remova-a).");
+    expect(validateItems("LIVRE", [livre({ answers: [{ label: "Gato", icon: "" }, { label: "gato", icon: "" }], correctIndex: 0 })]))
+      .toContain("Item 1: há respostas repetidas.");
+    expect(validateItems("LIVRE", [livre({ answers: [{ label: "Gato", icon: "" }], correctIndex: 0 })]))
+      .toContain("Item 1: use de 2 a 4 respostas.");
+    expect(validateItems("LIVRE", [livre({ supportText: "x".repeat(301) })]))
+      .toContain("Item 1: o texto de apoio pode ter até 300 letras.");
+  });
+
+  it("remover uma resposta mantém a certa (ou volta para a 1ª se a certa sair)", () => {
+    expect(removeAnswer(livre({ correctIndex: 2 }), 0)).toMatchObject({ correctIndex: 1 });
+    expect(removeAnswer(livre({ correctIndex: 0 }), 2)).toMatchObject({ correctIndex: 0 });
+    expect(removeAnswer(livre({ correctIndex: 1 }), 1)).toMatchObject({ correctIndex: 0 });
+    expect(removeAnswer(livre(), 1).answers.map((a) => a.label)).toEqual(["Gato", "Peixe"]);
+  });
+
+  it("no máximo 4 respostas (uma por marcador)", () => {
+    const four = addAnswer(livre());
+    expect(four.answers).toHaveLength(4);
+    expect(addAnswer(four).answers).toHaveLength(4);
   });
 });

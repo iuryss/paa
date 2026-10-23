@@ -43,7 +43,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       className={`${nunito.variable} ${andika.variable} ${atkinson.variable}`}
     >
       <body>
-        <AccessibilityProvider initial={prefs} persist={savePreferencesAction}>
+        {/* key: ao entrar/sair a navegação não recarrega a página; sem remontar, o provedor ficaria com
+            as preferências da tela anterior (ex.: o padrão do /entrar) enquanto o <html> já mostra as do aluno. */}
+        <AccessibilityProvider key={session?.user?.id ?? "anonimo"} initial={prefs} persist={savePreferencesAction}>
           <a
             href="#conteudo"
             className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-[20px] focus:border-2 focus:border-primary-border focus:bg-primary focus:px-6 focus:py-4 focus:text-button focus:text-on-primary"

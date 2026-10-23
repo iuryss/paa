@@ -2,7 +2,7 @@ import { z } from "zod";
 import { DEFAULT_MARKER_STYLE, MARKER_STYLES } from "@/lib/activities/markers";
 import { sanitizeText } from "@/lib/sanitize";
 
-export const SUPPORTED_MODULES = ["LOCALIZACAO", "GRAFIA", "MATEMATICA"] as const;
+export const SUPPORTED_MODULES = ["LOCALIZACAO", "GRAFIA", "MATEMATICA", "LIVRE"] as const;
 export type SupportedModule = (typeof SUPPORTED_MODULES)[number];
 
 export const DIRECTIONS = ["norte", "sul", "leste", "oeste"] as const;
@@ -20,6 +20,32 @@ export const ICON_NAMES = [
   "maca",
   "estrela",
   "circulo",
+  // Usados principalmente nas perguntas livres (natureza, bichos, comida, rotina, emoções).
+  "sol",
+  "lua",
+  "nuvem",
+  "chuva",
+  "agua",
+  "flor",
+  "cachorro",
+  "gato",
+  "peixe",
+  "passaro",
+  "banana",
+  "cenoura",
+  "leite",
+  "comida",
+  "carro",
+  "onibus",
+  "livro",
+  "roupa",
+  "cama",
+  "banho",
+  "mao",
+  "musica",
+  "coracao",
+  "feliz",
+  "triste",
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
@@ -28,7 +54,9 @@ export type IconName = (typeof ICON_NAMES)[number];
 export type Stimulus =
   | { kind: "map"; piece: { label: string; icon?: IconName }; position: Direction }
   | { kind: "letter"; display: string }
-  | { kind: "count"; a: number; b: number };
+  | { kind: "count"; a: number; b: number }
+  /** Pergunta livre: apoio opcional (texto curto e/ou pictograma) escrito pelo professor. */
+  | { kind: "free"; text?: string; icon?: IconName };
 
 export interface PlayOption {
   id: string;
@@ -86,6 +114,23 @@ const matematicaItem = z
   })
   .strict();
 
+/** Até 300 caracteres de apoio: ~6 linhas de 45 caracteres, o limite de leitura do design system. */
+export const MAX_SUPPORT_TEXT = 300;
+
+const livreItem = z
+  .object({
+    ...itemShape(slug),
+    support: text(MAX_SUPPORT_TEXT).optional(),
+    supportIcon: icon.optional(),
+  })
+  .strict()
+  .superRefine((item, ctx) => {
+    const labels = item.options.map((o) => o.label.toLocaleLowerCase("pt-BR"));
+    if (new Set(labels).size !== labels.length) {
+      ctx.addIssue({ code: "custom", path: ["options"], message: "Respostas com o mesmo texto." });
+    }
+  });
+
 interface ItemLike {
   key: string;
   correctId: string;
@@ -123,6 +168,7 @@ export const contentSchemas = {
   LOCALIZACAO: content(localizacaoItem),
   GRAFIA: content(grafiaItem),
   MATEMATICA: content(matematicaItem),
+  LIVRE: content(livreItem),
 } as const;
 
 export function isSupportedModule(value: string): value is SupportedModule {
@@ -147,6 +193,10 @@ function stimulusFor(module: SupportedModule, item: RawItem): Stimulus {
   }
   if (module === "GRAFIA") {
     return { kind: "letter", display: (item as unknown as { display: string }).display };
+  }
+  if (module === "LIVRE") {
+    const { support, supportIcon } = item as { support?: string; supportIcon?: IconName };
+    return { kind: "free", ...(support ? { text: support } : {}), ...(supportIcon ? { icon: supportIcon } : {}) };
   }
   const { a, b } = item as unknown as { a: number; b: number };
   return { kind: "count", a, b };

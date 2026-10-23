@@ -31,13 +31,15 @@
   }
 }
 
-/* Baixo estímulo: sem animações nem transições. Vale pelo perfil (data-motion) e pelo sistema operacional. */
+/* Baixo estímulo: sem animações nem transições. Vale pelo perfil (data-motion) e pelo sistema operacional.
+   Transição em 0s (e não 0.01ms): com 0.01ms, toda troca de cor (ex.: o tema ao entrar) vira uma microtransição
+   e a tela mostra a cor antiga por um quadro. Nenhum código depende de transitionend. */
 [data-motion="reduce"] *,
 [data-motion="reduce"] *::before,
 [data-motion="reduce"] *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
-  transition-duration: 0.01ms !important;
+  transition-duration: 0s !important;
   scroll-behavior: auto !important;
 }
 
@@ -52,7 +54,7 @@
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: 0s !important;
     scroll-behavior: auto !important;
   }
 

@@ -1,17 +1,31 @@
+import { MAX_MARKERS } from "@/lib/activities/markers";
 import {
   DIRECTIONS,
   ICON_NAMES,
+  MAX_SUPPORT_TEXT,
   type Direction,
   type IconName,
   type SupportedModule,
 } from "@/lib/validation/activities";
 
+export interface EditorAnswer {
+  label: string;
+  icon: IconName | "";
+}
+
 /**
  * Modelo do editor do professor: um formulário guiado (nunca JSON cru).
- * O professor digita o enunciado e as opções ERRADAS; a resposta certa é derivada do estímulo
- * (letra minúscula, soma, direção), então não há como cadastrar um item sem resposta correta.
+ * Localização, Grafia e Matemática: o professor digita o enunciado e as opções ERRADAS; a resposta
+ * certa é derivada do estímulo (letra minúscula, soma, direção).
+ * Perguntas livres: o professor escreve TODAS as respostas e marca a certa (sempre há uma marcada).
  */
 export interface EditorItem {
+  /** Perguntas livres: texto e figura de apoio (opcionais). */
+  supportText: string;
+  supportIcon: IconName | "";
+  /** Perguntas livres: de 2 a 4 respostas, e o índice da certa. */
+  answers: EditorAnswer[];
+  correctIndex: number;
   prompt: string;
   hint: string;
   /** Grafia e Matemática: de 1 a 3 opções erradas. */
@@ -45,6 +59,31 @@ export const ICON_LABEL: Record<IconName, string> = {
   maca: "Maçã",
   estrela: "Estrela",
   circulo: "Círculo",
+  sol: "Sol",
+  lua: "Lua",
+  nuvem: "Nuvem",
+  chuva: "Chuva",
+  agua: "Água",
+  flor: "Flor",
+  cachorro: "Cachorro",
+  gato: "Gato",
+  peixe: "Peixe",
+  passaro: "Pássaro",
+  banana: "Banana",
+  cenoura: "Cenoura",
+  leite: "Leite",
+  comida: "Comida (prato e talheres)",
+  carro: "Carro",
+  onibus: "Ônibus",
+  livro: "Livro",
+  roupa: "Roupa",
+  cama: "Cama",
+  banho: "Banho",
+  mao: "Mão",
+  musica: "Música",
+  coracao: "Coração",
+  feliz: "Rosto feliz",
+  triste: "Rosto triste",
 };
 
 /** Pictogramas oferecidos para as peças do mapa (as setas de direção ficam de fora). */
@@ -52,10 +91,19 @@ export const PIECE_ICONS = ICON_NAMES.filter((n) => !DIRECTIONS.includes(n as Di
 
 export const MIN_DISTRACTORS = 1;
 export const MAX_DISTRACTORS = 3;
+export const MIN_ANSWERS = 2;
+/** Uma resposta por marcador (círculo, triângulo, quadrado, estrela). */
+export const MAX_ANSWERS = MAX_MARKERS;
 export const MAX_ITEMS = 20;
+
+const emptyAnswer = (): EditorAnswer => ({ label: "", icon: "" });
 
 export function emptyItem(module: SupportedModule): EditorItem {
   const base: EditorItem = {
+    supportText: "",
+    supportIcon: "",
+    answers: [],
+    correctIndex: 0,
     prompt: "",
     hint: "",
     distractors: [],
@@ -68,7 +116,21 @@ export function emptyItem(module: SupportedModule): EditorItem {
   };
   if (module === "GRAFIA") return { ...base, distractors: ["", ""] };
   if (module === "MATEMATICA") return { ...base, distractors: ["", ""] };
+  if (module === "LIVRE") return { ...base, answers: [emptyAnswer(), emptyAnswer()] };
   return base;
+}
+
+/** Remove uma resposta sem perder qual é a certa (se a certa sair, a 1ª passa a ser a certa). */
+export function removeAnswer(item: EditorItem, index: number): EditorItem {
+  const answers = item.answers.filter((_, i) => i !== index);
+  const correctIndex =
+    index === item.correctIndex ? 0 : index < item.correctIndex ? item.correctIndex - 1 : item.correctIndex;
+  return { ...item, answers, correctIndex };
+}
+
+export function addAnswer(item: EditorItem): EditorItem {
+  if (item.answers.length >= MAX_ANSWERS) return item;
+  return { ...item, answers: [...item.answers, emptyAnswer()] };
 }
 
 /** "Árvore" → "arvore"; vazio vira o índice. Garante ids válidos no schema (a-z, 0-9, hífen). */
@@ -83,15 +145,21 @@ function slug(label: string, index: number): string {
   return clean || `opcao-${index + 1}`;
 }
 
-function buildOptions(prefix: string, correct: string, distractors: string[]) {
-  const labels = [correct, ...distractors.map((d) => d.trim()).filter(Boolean)];
+/** Ids estáveis e únicos a partir dos rótulos ("Árvore" → "o-arvore"). */
+function uniqueIds(prefix: string, labels: string[]): string[] {
   const used = new Set<string>();
-  const options = labels.map((label, i) => {
+  return labels.map((label, i) => {
     let id = `${prefix}-${slug(label, i)}`;
     while (used.has(id)) id = `${id}-${i}`;
     used.add(id);
-    return { id, label };
+    return id;
   });
+}
+
+function buildOptions(prefix: string, correct: string, distractors: string[]) {
+  const labels = [correct, ...distractors.map((d) => d.trim()).filter(Boolean)];
+  const ids = uniqueIds(prefix, labels);
+  const options = labels.map((label, i) => ({ id: ids[i]!, label }));
   return { options, correctId: options[0]!.id };
 }
 
@@ -122,6 +190,17 @@ export function toContent(module: SupportedModule, items: EditorItem[]): { items
           correctId: item.position,
         };
       }
+      if (module === "LIVRE") {
+        const labels = item.answers.map((a) => a.label.trim());
+        const ids = uniqueIds("o", labels);
+        return {
+          ...common,
+          ...(item.supportText.trim() ? { support: item.supportText.trim() } : {}),
+          ...(item.supportIcon ? { supportIcon: item.supportIcon } : {}),
+          options: item.answers.map((a, j) => ({ id: ids[j]!, label: labels[j]!, ...(a.icon ? { icon: a.icon } : {}) })),
+          correctId: ids[item.correctIndex] ?? "",
+        };
+      }
       if (module === "GRAFIA") {
         return {
           ...common,
@@ -142,8 +221,10 @@ export function toContent(module: SupportedModule, items: EditorItem[]): { items
 interface StoredItem {
   prompt: string;
   hint?: string;
-  options: { id: string; label: string }[];
+  options: { id: string; label: string; icon?: IconName }[];
   correctId: string;
+  support?: string;
+  supportIcon?: IconName;
   piece?: { label: string; icon?: IconName };
   position?: Direction;
   display?: string;
@@ -159,7 +240,13 @@ export function fromContent(module: SupportedModule, content: unknown): EditorIt
     prompt: s.prompt,
     hint: s.hint ?? "",
     distractors:
-      module === "LOCALIZACAO" ? [] : s.options.filter((o) => o.id !== s.correctId).map((o) => o.label),
+      module === "GRAFIA" || module === "MATEMATICA"
+        ? s.options.filter((o) => o.id !== s.correctId).map((o) => o.label)
+        : [],
+    supportText: s.support ?? "",
+    supportIcon: s.supportIcon ?? "",
+    answers: module === "LIVRE" ? s.options.map((o) => ({ label: o.label, icon: o.icon ?? "" })) : [],
+    correctIndex: module === "LIVRE" ? Math.max(0, s.options.findIndex((o) => o.id === s.correctId)) : 0,
     display: s.display ?? "",
     a: s.a ?? 1,
     b: s.b ?? 1,
@@ -184,6 +271,25 @@ export function validateItems(module: SupportedModule, items: EditorItem[]): str
 
     if (module === "LOCALIZACAO") {
       if (!item.pieceLabel.trim()) errors.push(`${n}: dê um nome para a peça (ex.: Escola).`);
+      return;
+    }
+
+    if (module === "LIVRE") {
+      if (item.supportText.trim().length > MAX_SUPPORT_TEXT) {
+        errors.push(`${n}: o texto de apoio pode ter até ${MAX_SUPPORT_TEXT} letras.`);
+      }
+      const labels = item.answers.map((a) => a.label.trim());
+      if (labels.length < MIN_ANSWERS || labels.length > MAX_ANSWERS) {
+        errors.push(`${n}: use de ${MIN_ANSWERS} a ${MAX_ANSWERS} respostas.`);
+      }
+      labels.forEach((label, j) => {
+        if (!label) errors.push(`${n}: escreva a resposta ${j + 1} (ou remova-a).`);
+      });
+      const filled = labels.filter(Boolean).map((l) => l.toLocaleLowerCase("pt-BR"));
+      if (new Set(filled).size !== filled.length) errors.push(`${n}: há respostas repetidas.`);
+      if (item.correctIndex < 0 || item.correctIndex >= labels.length) {
+        errors.push(`${n}: marque qual é a resposta certa.`);
+      }
       return;
     }
 
