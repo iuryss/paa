@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { checkNameAttempt } from "@/lib/activities/name";
 import { maxHelp } from "@/lib/activities/runner";
 import { parseActivityContent } from "@/lib/validation/activities";
 import type { AttemptInput } from "@/lib/validation/telemetry";
@@ -67,12 +68,21 @@ export async function recordAttempt(
 
   const parsed = parseActivityContent(session.activity.module, session.activity.content);
   if (!parsed.success) throw new TelemetryError("invalid_item");
-  const item = parsed.items.find((i) => i.key === input.itemKey);
-  if (!item || !item.options.some((o) => o.id === input.optionId)) {
-    throw new TelemetryError("invalid_item");
-  }
 
-  const correct = input.optionId === item.correctId;
+  let correct: boolean;
+  if (parsed.name) {
+    // Escrever o nome: a letra certa de cada casa vem do apelido ATUAL do aluno, no servidor.
+    const student = await prisma.user.findUnique({ where: { id: studentId }, select: { displayName: true } });
+    const judged = checkNameAttempt(student?.displayName ?? "", parsed.name.letterCase, input.itemKey, input.optionId);
+    if (judged === null) throw new TelemetryError("invalid_item");
+    correct = judged;
+  } else {
+    const item = parsed.items.find((i) => i.key === input.itemKey);
+    if (!item || !item.options.some((o) => o.id === input.optionId)) {
+      throw new TelemetryError("invalid_item");
+    }
+    correct = input.optionId === item.correctId;
+  }
 
   await prisma.$transaction([
     prisma.attempt.create({

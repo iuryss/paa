@@ -1,5 +1,6 @@
 import type { ActivityModule, Difficulty, MarkerStyle } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { buildNameItem, type NamePlayItem } from "@/lib/activities/name";
 import { shuffleItemOptions } from "@/lib/activities/shuffle";
 import { parseActivityContent, type PlayItem } from "@/lib/validation/activities";
 
@@ -15,6 +16,11 @@ export interface PlayableActivity extends ActivitySummary {
   /** Escolha do professor; o tema da criança pode restringir (ver `resolveMarkerStyle`). */
   markerStyle: MarkerStyle;
   items: PlayItem[];
+  /**
+   * Só no módulo NOME: o quadro montado com o apelido do aluno.
+   * null = o apelido não tem letras (a tela pede ajuda ao professor em vez de quebrar).
+   */
+  name?: NamePlayItem | null;
 }
 
 export async function listAssignedActivities(studentId: string): Promise<ActivitySummary[]> {
@@ -46,6 +52,7 @@ export async function getPlayableActivity(
           content: true,
         },
       },
+      student: { select: { displayName: true } },
     },
   });
   if (!row) return null;
@@ -53,5 +60,8 @@ export async function getPlayableActivity(
   const { content, ...activity } = row.activity;
   const parsed = parseActivityContent(activity.module, content);
   if (!parsed.success) return null;
+  if (parsed.name) {
+    return { ...activity, items: [], name: buildNameItem(row.student?.displayName ?? "", parsed.name, random) };
+  }
   return { ...activity, items: shuffleItemOptions(parsed.items, random) };
 }

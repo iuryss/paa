@@ -7,6 +7,7 @@ const m = {
   sessionFind: jest.fn(),
   sessionUpdate: jest.fn(),
   attemptCreate: jest.fn(),
+  userFind: jest.fn(),
 };
 
 jest.mock("@/lib/db", () => ({
@@ -19,6 +20,7 @@ jest.mock("@/lib/db", () => ({
       update: (...a: unknown[]) => m.sessionUpdate(...a),
     },
     attempt: { create: (...a: unknown[]) => m.attemptCreate(...a) },
+    user: { findUnique: (...a: unknown[]) => m.userFind(...a) },
     $transaction: (ops: Promise<unknown>[]) => Promise.all(ops),
   },
 }));
@@ -179,5 +181,30 @@ describe("finishSession", () => {
   it("não fecha sessão de outro aluno", async () => {
     m.sessionFind.mockResolvedValue(null);
     await expect(finishSession("outro", "sess1")).rejects.toMatchObject({ code: "not_found" });
+  });
+});
+
+describe("recordAttempt — Escrever o nome", () => {
+  const nome = { items: [{ key: "nome", prompt: "Escreva seu nome", extraLetters: 3, letterCase: "MAIUSCULAS", showModel: true }] };
+  const nameSession = { status: "IN_PROGRESS", maxHelpLevel: "NONE", activity: { module: "NOME", content: nome } };
+  const place = (itemKey: string, optionId: string) => ({ ...attempt, itemKey, optionId });
+
+  beforeEach(() => {
+    m.sessionFind.mockResolvedValue(nameSession);
+    m.userFind.mockResolvedValue({ displayName: "Ana" });
+  });
+
+  it("confere cada letra pelo apelido do aluno, no servidor (qualquer A serve no A)", async () => {
+    await expect(recordAttempt("stu1", "sess1", place("letra-1", "c65-4"))).resolves.toEqual({ correct: true });
+    await expect(recordAttempt("stu1", "sess1", place("letra-3", "c65-0"))).resolves.toEqual({ correct: true });
+    await expect(recordAttempt("stu1", "sess1", place("letra-2", "c65-0"))).resolves.toEqual({ correct: false });
+    expect(m.userFind).toHaveBeenCalledWith({ where: { id: "stu1" }, select: { displayName: true } });
+    expect(m.attemptCreate.mock.calls[2]?.[0].data).toMatchObject({ itemKey: "letra-2", correct: false });
+  });
+
+  it("casa ou peça inexistente é recusada (não vira tentativa)", async () => {
+    await expect(recordAttempt("stu1", "sess1", place("letra-9", "c65-0"))).rejects.toMatchObject({ code: "invalid_item" });
+    await expect(recordAttempt("stu1", "sess1", place("letra-1", "l-a"))).rejects.toBeInstanceOf(TelemetryError);
+    expect(m.attemptCreate).not.toHaveBeenCalled();
   });
 });
