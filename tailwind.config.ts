@@ -7,6 +7,7 @@ const tokenNames = [
   "primary", "on-primary", "primary-border", "accent", "on-accent",
   "success-bg", "success-ink", "success-border", "retry-bg", "retry-ink", "retry-border",
   "drop-bg", "drop-border", "drop-active-bg", "drop-active-border",
+  "marker-azul", "marker-amarelo", "marker-verde", "marker-roxo",
   "focus-ring", "disabled-bg", "disabled-ink",
 ];
 

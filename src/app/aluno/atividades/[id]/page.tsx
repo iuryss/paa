@@ -21,6 +21,7 @@ export default async function AtividadePage({ params }: { params: Promise<{ id: 
         activityId={activity.id}
         title={activity.title}
         items={activity.items}
+        markerStyle={activity.markerStyle}
         onStart={startSessionAction}
         onRecord={recordAttemptAction}
         onFinish={finishSessionAction}

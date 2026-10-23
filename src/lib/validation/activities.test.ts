@@ -150,7 +150,18 @@ describe("createActivitySchema", () => {
   };
 
   it("aplica padrões (dificuldade inicial, rascunho)", () => {
-    expect(createActivitySchema.parse(valid)).toMatchObject({ difficulty: "INICIAL", published: false });
+    expect(createActivitySchema.parse(valid)).toMatchObject({
+      difficulty: "INICIAL",
+      published: false,
+      markerStyle: "CORES_E_FORMAS",
+    });
+  });
+
+  it("aceita os três estilos de marcador e recusa outros", () => {
+    for (const markerStyle of ["CORES_E_FORMAS", "FORMAS", "CORES"]) {
+      expect(createActivitySchema.safeParse({ ...valid, markerStyle }).success).toBe(true);
+    }
+    expect(createActivitySchema.safeParse({ ...valid, markerStyle: "NEON" }).success).toBe(false);
   });
 
   it("rejeita conteúdo que não bate com o módulo", () => {

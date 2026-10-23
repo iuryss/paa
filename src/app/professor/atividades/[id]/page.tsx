@@ -32,6 +32,7 @@ export default async function EditarAtividadePage({ params }: { params: Promise<
           title: activity.title,
           instruction: activity.instruction,
           difficulty: activity.difficulty,
+          markerStyle: activity.markerStyle,
           published: activity.published,
           items: activity.items,
         }}

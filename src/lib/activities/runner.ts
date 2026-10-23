@@ -8,8 +8,15 @@ export function maxHelp(a: HelpLevel, b: HelpLevel): HelpLevel {
   return HELP_ORDER.indexOf(a) >= HELP_ORDER.indexOf(b) ? a : b;
 }
 
-/** Redirecionamentos seguidos no mesmo item que fazem a dica visual aparecer sozinha. */
-export const REDIRECTS_BEFORE_VISUAL_HINT = 2;
+/**
+ * Escada de dicas (cada degrau só aparece depois do anterior):
+ * 1. dica escrita do professor (VERBAL_HINT), se houver;
+ * 2. dica do marcador: "Procure o triângulo amarelo" (VISUAL_HINT);
+ * 3. destaque: a opção certa fica marcada na tela (VISUAL_HINT).
+ * Redirecionamentos seguidos também sobem a escada sozinhos.
+ */
+export const REDIRECTS_BEFORE_MARKER_HINT = 2;
+export const REDIRECTS_BEFORE_HIGHLIGHT = 3;
 
 export interface ItemState {
   /** answering = aguardando; correct = acertou; redirect = convite para tentar de novo. Não existe "erro". */
@@ -19,6 +26,9 @@ export interface ItemState {
   redirects: number;
   help: HelpLevel;
   hintShown: boolean;
+  /** A dica aponta o marcador (cor/forma) da resposta certa. */
+  markerHint: boolean;
+  /** A opção certa fica destacada na tela. */
   visualHint: boolean;
   shownAt: number;
 }
@@ -39,6 +49,7 @@ export function initialItemState(now: number): ItemState {
     redirects: 0,
     help: "NONE",
     hintShown: false,
+    markerHint: false,
     visualHint: false,
     shownAt: now,
   };
@@ -72,25 +83,30 @@ export function answer(
   }
 
   const redirects = state.redirects + 1;
-  const escalate = redirects >= REDIRECTS_BEFORE_VISUAL_HINT;
+  const markerHint = state.markerHint || redirects >= REDIRECTS_BEFORE_MARKER_HINT;
+  const visualHint = state.visualHint || redirects >= REDIRECTS_BEFORE_HIGHLIGHT;
   return {
     state: {
       ...state,
       status: "redirect",
       attempts: attempt.attemptNo,
       redirects,
-      visualHint: state.visualHint || escalate,
-      help: escalate ? maxHelp(state.help, "VISUAL_HINT") : state.help,
+      markerHint,
+      visualHint,
+      help: markerHint ? maxHelp(state.help, "VISUAL_HINT") : state.help,
     },
     attempt,
   };
 }
 
-/** Criança pediu ajuda: primeiro a dica falada/escrita; se já viu (ou não há), destaca a resposta. */
+/** Criança pediu ajuda: sobe um degrau da escada (dica escrita → marcador → destaque). */
 export function requestHint(item: PlayItem, state: ItemState): ItemState {
   if (state.status === "correct") return state;
   if (!state.hintShown && item.hint) {
     return { ...state, hintShown: true, help: maxHelp(state.help, "VERBAL_HINT") };
+  }
+  if (!state.markerHint) {
+    return { ...state, markerHint: true, help: maxHelp(state.help, "VISUAL_HINT") };
   }
   return { ...state, visualHint: true, help: maxHelp(state.help, "VISUAL_HINT") };
 }

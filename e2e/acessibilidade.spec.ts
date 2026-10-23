@@ -75,9 +75,12 @@ for (const theme of THEMES) {
       await expect(page.getByRole("status").filter({ hasText: "Quase!" })).toBeVisible();
       await scan(page, "Letras: após resposta diferente (Quase!)", findings);
       await option(page, "e").click();
-      await expect(page.getByText("Olhe a opção marcada.")).toBeVisible();
-      await scan(page, "Letras: dica visual", findings);
-      await page.getByRole("button", { name: "a Dica: esta opção" }).click();
+      await expect(page.getByText(/Procure (o|a) /)).toBeVisible();
+      await scan(page, "Letras: dica do marcador", findings);
+      await option(page, "o").click();
+      await expect(option(page, "a")).toHaveAccessibleName(/Dica: esta opção$/);
+      await scan(page, "Letras: destaque da resposta", findings);
+      await option(page, "a").click();
       await expect(page.getByRole("status").filter({ hasText: "Isso!" })).toBeVisible();
       await scan(page, "Letras: acerto (Isso!)", findings);
 

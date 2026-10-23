@@ -1,4 +1,4 @@
-import type { ActivityModule, Difficulty } from "@prisma/client";
+import type { ActivityModule, Difficulty, MarkerStyle } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { shuffleItemOptions } from "@/lib/activities/shuffle";
 import { parseActivityContent, type PlayItem } from "@/lib/validation/activities";
@@ -12,6 +12,8 @@ export interface ActivitySummary {
 
 export interface PlayableActivity extends ActivitySummary {
   instruction: string;
+  /** Escolha do professor; o tema da criança pode restringir (ver `resolveMarkerStyle`). */
+  markerStyle: MarkerStyle;
   items: PlayItem[];
 }
 
@@ -40,6 +42,7 @@ export async function getPlayableActivity(
           module: true,
           difficulty: true,
           instruction: true,
+          markerStyle: true,
           content: true,
         },
       },

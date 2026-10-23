@@ -48,6 +48,11 @@ const UI_PAIRS: [string, string][] = [
   ["success-border", "success-bg"],
 ];
 
+// Marcadores das respostas: a forma precisa se destacar 3:1, pelo contorno (ink) ou pelo próprio
+// preenchimento contra o fundo da opção. No Foco Alto eles viram só formas, sem cor.
+const MARKERS = ["marker-azul", "marker-amarelo", "marker-verde", "marker-roxo"];
+const OPTION_BACKGROUNDS = ["surface", "success-bg", "drop-active-bg"];
+
 describe("tokens.css está em sincronia com design/tokens.json", () => {
   it("declara todos os tokens de cor em todos os temas", () => {
     for (const theme of themes) {
@@ -74,5 +79,18 @@ describe.each(themes)("contraste WCAG no tema %s", (theme) => {
 
   it.each(UI_PAIRS)("elemento %s sobre %s ≥ 3:1", (fg, bg) => {
     expect(contrastRatio(color(theme, fg), color(theme, bg))).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(OPTION_BACKGROUNDS)("contorno dos marcadores (ink) sobre %s ≥ 3:1", (bg) => {
+    expect(contrastRatio(color(theme, "ink"), color(theme, bg))).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(MARKERS)("marcador %s se separa do contorno ou do fundo por 3:1", (marker) => {
+    if (theme === "foco") return; // sem cor no Foco Alto
+    const fill = color(theme, marker);
+    for (const bg of OPTION_BACKGROUNDS) {
+      const best = Math.max(contrastRatio(fill, color(theme, "ink")), contrastRatio(fill, color(theme, bg)));
+      expect(best).toBeGreaterThanOrEqual(3);
+    }
   });
 });

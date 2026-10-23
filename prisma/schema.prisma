@@ -46,6 +46,14 @@ enum ActivityModule {
   CIENCIAS
 }
 
+/// Marcadores das respostas e das dicas (escolhido pelo professor em cada atividade).
+/// No tema Foco Alto vira sempre FORMAS (o tema é monocromático).
+enum MarkerStyle {
+  CORES_E_FORMAS
+  FORMAS
+  CORES
+}
+
 enum Difficulty {
   INICIAL
   INTERMEDIARIO
@@ -185,6 +193,7 @@ model Activity {
   content     Json
   /// Texto alternativo/pictograma por item, para o modo PECS.
   pictograms  Json?
+  markerStyle MarkerStyle    @default(CORES_E_FORMAS)
   published   Boolean        @default(false)
   authorId    String
   createdAt   DateTime       @default(now())

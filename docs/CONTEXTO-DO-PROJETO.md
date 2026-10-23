@@ -29,6 +29,7 @@ Design: veio de um artefato no Claude Design e foi copiado para `design/` (`toke
 **Aluno**
 - Entrada por código + PIN (`/entrar`), com bloqueio por tentativas erradas.
 - Lista de atividades, execução com feedback positivo, dicas que escalam, tela final "Muito bem!".
+- **Marcadores de cor/forma** em cada resposta (círculo azul, triângulo amarelo, quadrado verde, estrela roxa, pela posição na tela). A escada de dicas é: dica escrita → "Procure o triângulo amarelo" → destaque da opção. No tema Foco, só formas. Detalhes em `design/README.md`, seção "Marcadores".
 - Preferências próprias: tema, modo (textual ou pictográfico/PECS), fonte, movimento reduzido, som (o botão existe, mas **ainda não toca nada**).
 
 **Professor / terapeuta**
@@ -36,6 +37,7 @@ Design: veio de um artefato no Claude Design e foi copiado para `design/` (`toke
 - Painel com cartões dos alunos, relatório por aluno (autonomia, tendência, tempo, ajuda) e gráficos.
 - **Sessões interrompidas** (ver 6.5): aviso no cartão e tabela no relatório.
 - Editor de atividades (criar, editar, duplicar) dos 3 módulos. Qualquer profissional pode publicar; cabe ao professor do aluno decidir o que usar.
+- Em cada atividade o professor escolhe o estilo dos marcadores (`Activity.markerStyle`: cores e formas, só formas ou só cores). O estilo pode mudar mesmo com a atividade travada por sessões.
 - Perfil sensorial do aluno definido pelo professor, sem mudar a tela do próprio professor.
 - *Minha conta:* trocar senha e convidar colegas. (O painel técnico "Verificação do sistema" e o e-mail de teste foram **removidos** a pedido: diagnóstico agora é pelos logs da Vercel.)
 
