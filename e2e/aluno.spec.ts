@@ -116,6 +116,31 @@ test("Matemática: a conta aparece com as maçãs", async ({ page }) => {
   await expect(page.getByRole("status").filter({ hasText: "Isso!" })).toBeVisible();
 });
 
+test("Perguntas livres: apoio com figura e texto, marcadores e a resposta marcada pelo professor", async ({ page }) => {
+  await prisma.activitySession.deleteMany({});
+  await loginStudent(page, STUDENT.code, STUDENT.pin);
+  await openActivity(page, "Bichos");
+  await expect(page.getByRole("heading", { level: 1, name: "Qual bicho faz au-au?" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Casa" })).toBeVisible();
+  await expect(page.getByText("Na casa da Ana mora um bicho. Ele late quando alguém chega.")).toBeVisible();
+  await expect(page.getByRole("group", { name: "Respostas" }).locator("button svg[data-marker]")).toHaveCount(3);
+
+  await option(page, "Gato").click();
+  await expect(page.getByRole("status").filter({ hasText: "Quase!" })).toBeVisible();
+  await option(page, "Cachorro").click();
+  await expect(page.getByRole("status").filter({ hasText: "Você achou: Cachorro." })).toBeVisible();
+  await page.getByRole("button", { name: "Terminar" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Muito bem!" })).toBeVisible();
+
+  // O servidor conferiu as respostas pelo conteúdo da atividade (não pelo que o navegador disse).
+  await expect
+    .poll(async () => {
+      const s = await prisma.activitySession.findFirst({ where: { activityId: seed.activities.livre }, include: { attempts: true } });
+      return s && { status: s.status, correct: s.attempts.map((a) => a.correct) };
+    })
+    .toEqual({ status: "COMPLETED", correct: [false, true] });
+});
+
 test("a resposta certa não fica sempre na primeira posição", async ({ page }) => {
   await loginStudent(page, STUDENT.code, STUDENT.pin);
   const firsts = new Set<string>();

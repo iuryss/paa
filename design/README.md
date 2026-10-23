@@ -171,7 +171,7 @@ Cada resposta leva um marcador à esquerda do rótulo, e as dicas apontam para e
 
 ## Iconografia
 
-- Ainda sem conjunto de ícones definido. Requisito: traço grosso (≥ 2px a 24px), cantos arredondados, preenchimento simples, um ícone = um significado em toda a plataforma.
+- Conjunto: **Lucide** (`lucide-react`), mapeado por nome em `src/components/pictogram.tsx` a partir da lista fechada `ICON_NAMES` (direções, lugares, natureza, bichos, comida, rotina e emoções). Professores escolhem só dessa lista. Requisito: traço grosso (≥ 2px a 24px), cantos arredondados, preenchimento simples, um ícone = um significado em toda a plataforma.
 - Ícones sempre em `currentColor` herdando `ink`, `on-primary`, `success-ink` ou `retry-ink`. Tamanho mínimo 28px em botões.
 - Sem emoji na interface: a renderização muda por sistema e quebra a previsibilidade.
 

@@ -63,7 +63,7 @@ for (const theme of THEMES) {
       await expect(page.getByRole("link", { name: "Letras" })).toBeVisible();
       await scan(page, "/aluno/atividades", findings);
 
-      for (const title of ["Letras", "Onde fica?", "Contas"]) {
+      for (const title of ["Letras", "Onde fica?", "Contas", "Bichos"]) {
         await openActivity(page, title);
         await expect(page.getByRole("group", { name: "Respostas" })).toBeVisible();
         await scan(page, `atividade "${title}"`, findings);
@@ -109,6 +109,8 @@ for (const theme of THEMES) {
         ["/professor/atividades/nova?modulo=GRAFIA", "Nova atividade de Grafia"],
         ["/professor/atividades/nova?modulo=LOCALIZACAO", "Nova atividade de Localização"],
         ["/professor/atividades/nova?modulo=MATEMATICA", "Nova atividade de Matemática"],
+        ["/professor/atividades/nova?modulo=LIVRE", "Nova atividade de Perguntas livres"],
+        [`/professor/atividades/${seed.activities.livre}`, "Bichos"],
         [`/professor/atividades/${seed.activities.grafia}`, "Letras"],
         ["/professor/conta", "Minha conta"],
         ["/preferencias", "Como você prefere ver?"],

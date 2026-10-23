@@ -69,12 +69,30 @@ const matematica = {
   ],
 };
 
+const livre = {
+  items: [
+    {
+      key: "bicho-late",
+      prompt: "Qual bicho faz au-au?",
+      hint: "Ele balança o rabo.",
+      support: "Na casa da Ana mora um bicho. Ele late quando alguém chega.",
+      supportIcon: "casa",
+      options: [
+        { id: "o-gato", label: "Gato", icon: "gato" },
+        { id: "o-cachorro", label: "Cachorro", icon: "cachorro" },
+        { id: "o-peixe", label: "Peixe", icon: "peixe" },
+      ],
+      correctId: "o-cachorro",
+    },
+  ],
+};
+
 export interface Seeded {
   teacherId: string;
   otherTeacherId: string;
   studentId: string;
   lockStudentId: string;
-  activities: { grafia: string; localizacao: string; matematica: string };
+  activities: { grafia: string; localizacao: string; matematica: string; livre: string };
 }
 
 /** Apaga TUDO do banco de testes e recria o mínimo conhecido. Cada arquivo de teste começa limpo. */
@@ -103,16 +121,17 @@ export async function resetAndSeed(): Promise<Seeded> {
   const sol = await student(STUDENT);
   const lua = await student(LOCK_STUDENT);
 
-  const activity = (id: string, module: "GRAFIA" | "LOCALIZACAO" | "MATEMATICA", title: string, instruction: string, content: object) =>
+  const activity = (id: string, module: "GRAFIA" | "LOCALIZACAO" | "MATEMATICA" | "LIVRE", title: string, instruction: string, content: object) =>
     prisma.activity.create({
       data: { id, module, title, instruction, content: content as Prisma.InputJsonValue, published: true, authorId: teacher.id },
     });
   const g = await activity("e2e-grafia", "GRAFIA", "Letras", "Ache a letra pequena", grafia);
   const l = await activity("e2e-localizacao", "LOCALIZACAO", "Onde fica?", "Toque no lado certo do mapa", localizacao);
   const m = await activity("e2e-matematica", "MATEMATICA", "Contas", "Conte as maçãs", matematica);
+  const f = await activity("e2e-livre", "LIVRE", "Bichos", "Leia e escolha a resposta", livre);
 
   for (const s of [sol, lua]) {
-    for (const a of [g, l, m]) {
+    for (const a of [g, l, m, f]) {
       await prisma.assignment.create({ data: { activityId: a.id, studentId: s.id, assignedBy: teacher.id } });
     }
   }
@@ -122,7 +141,7 @@ export async function resetAndSeed(): Promise<Seeded> {
     otherTeacherId: other.id,
     studentId: sol.id,
     lockStudentId: lua.id,
-    activities: { grafia: g.id, localizacao: l.id, matematica: m.id },
+    activities: { grafia: g.id, localizacao: l.id, matematica: m.id, livre: f.id },
   };
 }
 

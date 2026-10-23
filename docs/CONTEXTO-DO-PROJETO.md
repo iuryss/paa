@@ -11,7 +11,7 @@ Plataforma educacional **adaptativa para crianças com Transtorno do Espectro Au
 - **Aluno (criança):** faz atividades curtas e vê só mensagens positivas. Nunca vê "erro": existe "Quase!" e "tente de novo", com dicas que aumentam aos poucos.
 - **Professor / terapeuta:** acompanha a evolução de cada aluno, cria atividades e define o perfil sensorial de cada criança.
 
-Módulos pedagógicos: **Localização espacial** (mapa N/S/L/O), **Grafia/alfabetização** (letras) e **Matemática básica** (contagem e soma).
+Módulos pedagógicos: **Localização espacial** (mapa N/S/L/O), **Grafia/alfabetização** (letras), **Matemática básica** (contagem e soma) e **Perguntas livres** (o professor escreve tudo).
 
 Princípios inegociáveis:
 - **LGPD:** nenhum dado pessoal da criança (sem nome completo, e-mail, CPF, foto). O aluno entra com um *código* e um *PIN*.
@@ -36,7 +36,8 @@ Design: veio de um artefato no Claude Design e foi copiado para `design/` (`toke
 - Entrada por e-mail + senha; convite por e-mail; "esqueci minha senha" com link de uso único.
 - Painel com cartões dos alunos, relatório por aluno (autonomia, tendência, tempo, ajuda) e gráficos.
 - **Sessões interrompidas** (ver 6.5): aviso no cartão e tabela no relatório.
-- Editor de atividades (criar, editar, duplicar) dos 3 módulos. Qualquer profissional pode publicar; cabe ao professor do aluno decidir o que usar.
+- Editor de atividades (criar, editar, duplicar) dos 4 módulos. Qualquer profissional pode publicar; cabe ao professor do aluno decidir o que usar.
+- **Perguntas livres** (`LIVRE`): o professor escreve a pergunta, um texto de apoio opcional (até 300 caracteres) e uma figura de apoio opcional, de 2 a 4 respostas (cada uma pode ter figura) e marca qual é a certa. As figuras vêm da lista fechada `ICON_NAMES` (35 pictogramas, sem URL externa nem upload). O servidor continua conferindo a resposta pelo conteúdo salvo.
 - Em cada atividade o professor escolhe o estilo dos marcadores (`Activity.markerStyle`: cores e formas, só formas ou só cores). O estilo pode mudar mesmo com a atividade travada por sessões.
 - Perfil sensorial do aluno definido pelo professor, sem mudar a tela do próprio professor.
 - *Minha conta:* trocar senha e convidar colegas. (O painel técnico "Verificação do sistema" e o e-mail de teste foram **removidos** a pedido: diagnóstico agora é pelos logs da Vercel.)
