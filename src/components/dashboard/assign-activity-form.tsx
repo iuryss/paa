@@ -17,8 +17,28 @@ export function AssignActivityForm({ studentId, options }: AssignActivityFormPro
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, setPending] = useState(false);
 
+  const status = (
+    <div role="status" aria-live="polite">
+      {message ? (
+        <Feedback
+          announce={false}
+          tone={message.ok ? "acerto" : "redirecionar"}
+          title={message.ok ? "Pronto!" : "Quase!"}
+        >
+          {message.text}
+        </Feedback>
+      ) : null}
+    </div>
+  );
+
+  // Depois de atribuir a última atividade a lista esvazia (router.refresh), mas a confirmação continua visível.
   if (options.length === 0) {
-    return <p className="text-ink-muted">Todas as atividades publicadas já foram atribuídas.</p>;
+    return (
+      <div className="flex flex-col gap-4">
+        {status}
+        <p className="text-ink-muted">Todas as atividades publicadas já foram atribuídas.</p>
+      </div>
+    );
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -62,17 +82,7 @@ export function AssignActivityForm({ studentId, options }: AssignActivityFormPro
           ))}
         </select>
       </div>
-      <div role="status" aria-live="polite">
-        {message ? (
-          <Feedback
-            announce={false}
-            tone={message.ok ? "acerto" : "redirecionar"}
-            title={message.ok ? "Pronto!" : "Quase!"}
-          >
-            {message.text}
-          </Feedback>
-        ) : null}
-      </div>
+      {status}
       <Button type="submit" icon={ListPlus} disabled={pending} className="self-start">
         Atribuir
       </Button>

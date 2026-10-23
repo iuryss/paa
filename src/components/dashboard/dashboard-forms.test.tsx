@@ -106,6 +106,17 @@ describe("AssignActivityForm", () => {
     expect(screen.getByText(/já foram atribuídas/)).toBeInTheDocument();
   });
 
+  it("ao atribuir a última atividade, a confirmação não some quando a lista esvazia", async () => {
+    reply(201, { id: "as1" });
+    const { rerender } = render(<AssignActivityForm studentId="stu12345" options={options.slice(0, 1)} />);
+    await userEvent.click(screen.getByRole("button", { name: "Atribuir" }));
+    expect(await screen.findByText("Atividade atribuída.")).toBeInTheDocument();
+
+    rerender(<AssignActivityForm studentId="stu12345" options={[]} />); // efeito do router.refresh()
+    expect(screen.getByText("Atividade atribuída.")).toBeInTheDocument();
+    expect(screen.getByText(/já foram atribuídas/)).toBeInTheDocument();
+  });
+
   it("passa no axe", async () => {
     const { container } = render(<AssignActivityForm studentId="stu12345" options={options} />);
     expect(await axe(container)).toHaveNoViolations();
