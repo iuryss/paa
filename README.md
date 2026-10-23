@@ -14,7 +14,7 @@ cp .env.example .env          # defina AUTH_SECRET (32+ caracteres)
 npm install
 npm run db:up                 # Postgres em localhost:5433
 npx prisma migrate dev
-npm run db:seed               # professor, aluno, 4 atividades e sessões de demonstração
+npm run db:seed               # professor, aluno, 5 atividades e sessões de demonstração
 npm run dev                   # http://localhost:3000
 ```
 

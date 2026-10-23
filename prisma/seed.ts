@@ -177,6 +177,27 @@ async function main() {
     });
   }
 
+  // Escrever o nome: só a configuração; as letras vêm do apelido de cada aluno ("Sol").
+  const nome = {
+    id: "seed-nome",
+    module: "NOME" as const,
+    title: "Meu nome",
+    instruction: "Monte o seu nome com as letras",
+    content: {
+      items: [{ key: "nome", prompt: "Escreva seu nome", extraLetters: 3, letterCase: "MAIUSCULAS", showModel: true }],
+    },
+  };
+  await prisma.activity.upsert({
+    where: { id: nome.id },
+    update: { content: nome.content, title: nome.title, instruction: nome.instruction, published: true },
+    create: { ...nome, published: true, authorId: teacher.id },
+  });
+  await prisma.assignment.upsert({
+    where: { activityId_studentId: { activityId: nome.id, studentId: student.id } },
+    update: {},
+    create: { activityId: nome.id, studentId: student.id, assignedBy: teacher.id },
+  });
+
   // Sessões de demonstração (só dev): 8 sessões em ~2 semanas em que o aluno ganha autonomia.
   // A atividade livre fica sem sessões, para o professor poder editá-la (sessões travam o conteúdo).
   await prisma.activitySession.deleteMany({ where: { id: { startsWith: "seed-sess-" } } });
@@ -217,7 +238,7 @@ async function main() {
     });
   }
 
-  console.log("Seed concluído (professor, aluno, 4 atividades e 8 sessões de demonstração).");
+  console.log("Seed concluído (professor, aluno, 5 atividades e 8 sessões de demonstração).");
 }
 
 main()

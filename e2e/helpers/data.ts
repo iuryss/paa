@@ -92,7 +92,7 @@ export interface Seeded {
   otherTeacherId: string;
   studentId: string;
   lockStudentId: string;
-  activities: { grafia: string; localizacao: string; matematica: string; livre: string };
+  activities: { grafia: string; localizacao: string; matematica: string; livre: string; nome: string };
 }
 
 /** Apaga TUDO do banco de testes e recria o mínimo conhecido. Cada arquivo de teste começa limpo. */
@@ -121,7 +121,7 @@ export async function resetAndSeed(): Promise<Seeded> {
   const sol = await student(STUDENT);
   const lua = await student(LOCK_STUDENT);
 
-  const activity = (id: string, module: "GRAFIA" | "LOCALIZACAO" | "MATEMATICA" | "LIVRE", title: string, instruction: string, content: object) =>
+  const activity = (id: string, module: "GRAFIA" | "LOCALIZACAO" | "MATEMATICA" | "LIVRE" | "NOME", title: string, instruction: string, content: object) =>
     prisma.activity.create({
       data: { id, module, title, instruction, content: content as Prisma.InputJsonValue, published: true, authorId: teacher.id },
     });
@@ -129,9 +129,13 @@ export async function resetAndSeed(): Promise<Seeded> {
   const l = await activity("e2e-localizacao", "LOCALIZACAO", "Onde fica?", "Toque no lado certo do mapa", localizacao);
   const m = await activity("e2e-matematica", "MATEMATICA", "Contas", "Conte as maçãs", matematica);
   const f = await activity("e2e-livre", "LIVRE", "Bichos", "Leia e escolha a resposta", livre);
+  // Sem modelo e com 2 letras extras: o e2e consegue ver a escada de dicas inteira.
+  const n = await activity("e2e-nome", "NOME", "Meu nome", "Monte o seu nome", {
+    items: [{ key: "nome", prompt: "Escreva seu nome", extraLetters: 2, letterCase: "MAIUSCULAS", showModel: false }],
+  });
 
   for (const s of [sol, lua]) {
-    for (const a of [g, l, m, f]) {
+    for (const a of [g, l, m, f, n]) {
       await prisma.assignment.create({ data: { activityId: a.id, studentId: s.id, assignedBy: teacher.id } });
     }
   }
@@ -141,7 +145,7 @@ export async function resetAndSeed(): Promise<Seeded> {
     otherTeacherId: other.id,
     studentId: sol.id,
     lockStudentId: lua.id,
-    activities: { grafia: g.id, localizacao: l.id, matematica: m.id, livre: f.id },
+    activities: { grafia: g.id, localizacao: l.id, matematica: m.id, livre: f.id, nome: n.id },
   };
 }
 

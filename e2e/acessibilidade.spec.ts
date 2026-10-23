@@ -84,6 +84,20 @@ for (const theme of THEMES) {
       await expect(page.getByRole("status").filter({ hasText: "Isso!" })).toBeVisible();
       await scan(page, "Letras: acerto (Isso!)", findings);
 
+      // Escrever o nome: quadro inicial, dica com modelo, peça em destaque e uma letra colocada.
+      await openActivity(page, "Meu nome");
+      const letters = page.getByRole("group", { name: "Letras" });
+      await expect(letters).toBeVisible();
+      await scan(page, "Meu nome: quadro", findings);
+      await page.getByRole("button", { name: "Dica" }).click();
+      await expect(page.getByText("Seu nome:")).toBeVisible();
+      await page.getByRole("button", { name: "Dica" }).click();
+      await expect(letters.getByRole("button", { name: /Dica: esta letra/ })).toBeVisible();
+      await scan(page, "Meu nome: dica e destaque", findings);
+      await letters.getByRole("button", { name: /Dica: esta letra/ }).click();
+      await expect(page.locator('[data-slot="1"]')).toHaveAttribute("data-state", "preenchida");
+      await scan(page, "Meu nome: letra colocada", findings);
+
       await page.goto("/preferencias");
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await scan(page, "/preferencias", findings);
@@ -110,6 +124,8 @@ for (const theme of THEMES) {
         ["/professor/atividades/nova?modulo=LOCALIZACAO", "Nova atividade de Localização"],
         ["/professor/atividades/nova?modulo=MATEMATICA", "Nova atividade de Matemática"],
         ["/professor/atividades/nova?modulo=LIVRE", "Nova atividade de Perguntas livres"],
+        ["/professor/atividades/nova?modulo=NOME", "Nova atividade de Escrever o nome"],
+        [`/professor/atividades/${seed.activities.nome}`, "Meu nome"],
         [`/professor/atividades/${seed.activities.livre}`, "Bichos"],
         [`/professor/atividades/${seed.activities.grafia}`, "Letras"],
         ["/professor/conta", "Minha conta"],
