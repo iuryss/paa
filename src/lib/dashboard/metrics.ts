@@ -156,6 +156,7 @@ export const MODULE_LABEL: Record<string, string> = {
   GRAFIA: "Grafia",
   MATEMATICA: "Matemática",
   CIENCIAS: "Ciências",
+  LIVRE: "Perguntas livres",
 };
 
 export const TREND_LABEL: Record<Trend, string> = {

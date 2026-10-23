@@ -85,6 +85,52 @@ describe("parseActivityContent", () => {
     expect(parseActivityContent("GRAFIA", extra).success).toBe(false);
   });
 
+  describe("Perguntas livres", () => {
+    const livre = {
+      items: [
+        {
+          key: "item-1",
+          prompt: "Qual bicho late?",
+          support: "<i>Na casa</i> da Ana tem um bicho.",
+          supportIcon: "casa",
+          options: [
+            { id: "o-gato", label: "Gato", icon: "gato" },
+            { id: "o-cachorro", label: "Cachorro", icon: "cachorro" },
+          ],
+          correctId: "o-cachorro",
+        },
+      ],
+    };
+
+    it("aceita apoio e sanitiza o texto; a certa é a escolhida pelo professor", () => {
+      const r = parseActivityContent("LIVRE", livre);
+      expect(r.success && r.items[0]).toMatchObject({
+        correctId: "o-cachorro",
+        stimulus: { kind: "free", text: "Na casa da Ana tem um bicho.", icon: "casa" },
+      });
+    });
+
+    it("recusa apoio longo, figura fora da lista e respostas com o mesmo texto", () => {
+      const long = clone(livre);
+      long.items[0]!.support = "x".repeat(301);
+      expect(parseActivityContent("LIVRE", long).success).toBe(false);
+
+      const url = clone(livre) as unknown as { items: Record<string, unknown>[] };
+      url.items[0]!.supportIcon = "https://exemplo.test/foto.png";
+      expect(parseActivityContent("LIVRE", url).success).toBe(false);
+
+      const twin = clone(livre);
+      twin.items[0]!.options[1]!.label = "gato";
+      expect(parseActivityContent("LIVRE", twin).success).toBe(false);
+    });
+
+    it("recusa campos de outros módulos (ex.: display)", () => {
+      const extra = clone(livre) as unknown as { items: Record<string, unknown>[] };
+      extra.items[0]!.display = "A";
+      expect(parseActivityContent("LIVRE", extra).success).toBe(false);
+    });
+  });
+
   it("rejeita módulo não suportado (Ciências ainda não tem jogo) e lixo", () => {
     expect(parseActivityContent("CIENCIAS", grafia).success).toBe(false);
     expect(parseActivityContent("GRAFIA", null).success).toBe(false);
