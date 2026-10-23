@@ -337,6 +337,52 @@ describe("ActivityRunner — módulos", () => {
     expect(document.body.textContent).not.toContain("= ?");
   });
 
+  it("Perguntas livres: mostra o apoio (figura com nome e texto) e usa a resposta marcada pelo professor", async () => {
+    const items = parse("LIVRE", {
+      items: [
+        {
+          key: "item-1",
+          prompt: "Qual bicho late?",
+          support: "Na casa da Ana tem um bicho que faz au-au.",
+          supportIcon: "casa",
+          options: [
+            { id: "o-gato", label: "Gato", icon: "gato" },
+            { id: "o-cachorro", label: "Cachorro", icon: "cachorro" },
+          ],
+          correctId: "o-cachorro",
+        },
+      ],
+    });
+    const { onRecord, container } = setup(items);
+    expect(screen.getByRole("img", { name: "Casa" })).toBeInTheDocument();
+    expect(screen.getByText("Na casa da Ana tem um bicho que faz au-au.")).toBeInTheDocument();
+
+    await userEvent.click(option("Gato"));
+    expect(screen.getByRole("status")).toHaveTextContent("Quase!");
+    await userEvent.click(option("Cachorro"));
+    expect(screen.getByRole("status")).toHaveTextContent("Você achou: Cachorro.");
+    await waitFor(() => expect(onRecord).toHaveBeenCalledTimes(2));
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("Perguntas livres sem apoio: nenhuma área vazia", () => {
+    const items = parse("LIVRE", {
+      items: [
+        {
+          key: "item-1",
+          prompt: "Qual é maior?",
+          options: [
+            { id: "o-sol", label: "Sol" },
+            { id: "o-bola", label: "Bola" },
+          ],
+          correctId: "o-sol",
+        },
+      ],
+    });
+    setup(items);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
   it("Modo pictográfico: opções com pictograma + palavra", () => {
     const items = parse("LOCALIZACAO", {
       items: [

@@ -44,6 +44,7 @@ const config: Config = {
         button: text("22px", "28px", "800"),
         numeral: text("72px", "80px", "800"),
         "letra-bastao": text("64px", "72px", "700"),
+        leitura: text("22px", "34px", "600"),
       },
       minHeight: { target: "64px", "target-lg": "88px" },
       minWidth: { target: "64px" },

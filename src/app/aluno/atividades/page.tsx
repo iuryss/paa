@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Hash, Map, Type } from "lucide-react";
+import { ArrowLeft, Hash, Map, MessageCircleQuestion, Type } from "lucide-react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { buttonVariants } from "@/components/ui/button";
@@ -12,6 +12,7 @@ const MODULE_ICON = {
   GRAFIA: <Type aria-hidden="true" className="size-7" strokeWidth={2.5} />,
   MATEMATICA: <Hash aria-hidden="true" className="size-7" strokeWidth={2.5} />,
   CIENCIAS: null,
+  LIVRE: <MessageCircleQuestion aria-hidden="true" className="size-7" strokeWidth={2.5} />,
 } as const;
 
 export default async function AtividadesPage() {
