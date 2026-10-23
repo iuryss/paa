@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Plus, Save, Trash2 } from "lucid
 import { useRouter } from "next/navigation";
 import { useId, useMemo, useState } from "react";
 import { ActivityRunner } from "@/components/activity-runner";
+import { MarkerShape } from "@/components/marker-shape";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Feedback } from "@/components/ui/feedback";
@@ -20,8 +21,16 @@ import {
   validateItems,
   type EditorItem,
 } from "@/lib/activities/editor-model";
+import {
+  DEFAULT_MARKER_STYLE,
+  MARKER_STYLE_LABEL,
+  MARKER_STYLES,
+  markerFor,
+  type MarkerStyle,
+} from "@/lib/activities/markers";
 import { shuffleItemOptions } from "@/lib/activities/shuffle";
 import { MODULE_LABEL } from "@/lib/dashboard/metrics";
+import { cn } from "@/lib/utils";
 import {
   contentSchemas,
   DIRECTIONS,
@@ -39,6 +48,12 @@ const DIFFICULTIES = [
 ] as const;
 type DifficultyValue = (typeof DIFFICULTIES)[number]["value"];
 
+const MARKER_STYLE_HELP: Record<MarkerStyle, string> = {
+  CORES_E_FORMAS: "Cada resposta tem uma forma e uma cor. A dica diz as duas (“o triângulo amarelo”).",
+  FORMAS: "Cada resposta tem uma forma, sem cor. A dica diz a forma (“o triângulo”).",
+  CORES: "Todas as respostas têm um círculo, de cores diferentes. A dica diz a cor (“a cor azul”).",
+};
+
 interface ActivityEditorProps {
   module: SupportedModule;
   activityId?: string;
@@ -46,6 +61,8 @@ interface ActivityEditorProps {
     title: string;
     instruction: string;
     difficulty: DifficultyValue;
+    /** Ausente = padrão (cores e formas). */
+    markerStyle?: MarkerStyle;
     published: boolean;
     items: EditorItem[];
   };
@@ -103,6 +120,7 @@ export function ActivityEditor({ module, activityId, initial, sessionCount = 0 }
   const [title, setTitle] = useState(initial.title);
   const [instruction, setInstruction] = useState(initial.instruction);
   const [difficulty, setDifficulty] = useState<DifficultyValue>(initial.difficulty);
+  const [markerStyle, setMarkerStyle] = useState<MarkerStyle>(initial.markerStyle ?? DEFAULT_MARKER_STYLE);
   const [published, setPublished] = useState(initial.published);
   const [items, setItems] = useState<EditorItem[]>(initial.items);
   const [errors, setErrors] = useState<string[]>([]);
@@ -144,7 +162,7 @@ export function ActivityEditor({ module, activityId, initial, sessionCount = 0 }
     setSaving(true);
     setMessage(null);
     try {
-      const base = { title, instruction, difficulty, published };
+      const base = { title, instruction, difficulty, markerStyle, published };
       const res = activityId
         ? await fetch(`/api/professor/atividades/${activityId}`, {
             method: "PATCH",
@@ -236,6 +254,45 @@ export function ActivityEditor({ module, activityId, initial, sessionCount = 0 }
             ))}
           </select>
         </div>
+        <fieldset className="flex flex-col gap-3">
+          <legend className="mb-1 text-label">Marcadores das respostas e das dicas</legend>
+          {MARKER_STYLES.map((style) => (
+            <label
+              key={style}
+              className={cn(
+                "flex items-start gap-4 rounded-[20px] border-2 px-4 py-3",
+                markerStyle === style ? "border-primary-border bg-drop-active-bg" : "border-border bg-surface",
+              )}
+            >
+              <input
+                type="radio"
+                name={`${uid}-marker-style`}
+                value={style}
+                checked={markerStyle === style}
+                onChange={() => setMarkerStyle(style)}
+                aria-labelledby={`${uid}-marker-${style}-name`}
+                aria-describedby={`${uid}-marker-${style}`}
+                className="mt-1 size-6 shrink-0"
+              />
+              <span className="flex flex-col gap-2">
+                <span id={`${uid}-marker-${style}-name`} className="text-body">
+                  {MARKER_STYLE_LABEL[style]}
+                </span>
+                <span aria-hidden="true" className="flex gap-2">
+                  {[0, 1, 2, 3].map((i) => (
+                    <MarkerShape key={i} marker={markerFor(i, style)} className="size-8" />
+                  ))}
+                </span>
+                <span id={`${uid}-marker-${style}`} className="text-label text-ink-muted">
+                  {MARKER_STYLE_HELP[style]}
+                </span>
+              </span>
+            </label>
+          ))}
+          <p className="text-label text-ink-muted">
+            No tema Foco Alto a criança sempre vê só as formas (o tema não usa cores).
+          </p>
+        </fieldset>
         <label className="flex items-center gap-3 text-body">
           <input
             type="checkbox"
@@ -385,6 +442,7 @@ export function ActivityEditor({ module, activityId, initial, sessionCount = 0 }
             activityId="preview"
             title={title || "Pré-visualização"}
             items={previewItems}
+            markerStyle={markerStyle}
             onStart={async () => ({ ok: false })}
             onRecord={async () => ({ ok: false })}
             onFinish={async () => ({ ok: false })}

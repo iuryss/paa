@@ -99,6 +99,7 @@ describe("ActivityEditor — criar", () => {
       title: "Letras do dia",
       instruction: "Ache a letra pequena",
       difficulty: "INICIAL",
+      markerStyle: "CORES_E_FORMAS",
       published: false,
     });
     expect(body.content.items[0]).toMatchObject({ key: "item-1", display: "A", correctId: "l-a" });
@@ -217,11 +218,22 @@ describe("ActivityEditor — editar", () => {
 
     await user.clear(screen.getByLabelText("Título"));
     await user.type(screen.getByLabelText("Título"), "Novo título");
+    // O estilo dos marcadores só muda a apresentação: continua editável mesmo travada.
+    await user.click(screen.getByRole("radio", { name: "Só formas" }));
     await user.click(screen.getByRole("button", { name: "Salvar" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const body = JSON.parse(fetchMock.mock.calls[0]![1].body);
     expect(body.title).toBe("Novo título");
+    expect(body.markerStyle).toBe("FORMAS");
     expect(body).not.toHaveProperty("content");
+  });
+
+  it("estilo dos marcadores: começa no salvo, com explicação de cada opção", () => {
+    setup("GRAFIA", { initial: { ...base, markerStyle: "CORES" } });
+    expect(screen.getByRole("group", { name: "Marcadores das respostas e das dicas" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Só cores" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Cores e formas" })).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: "Só formas" })).toHaveAccessibleDescription(/o triângulo/);
   });
 
   it("travada: 'Criar cópia' duplica e abre a cópia", async () => {
@@ -259,7 +271,7 @@ describe("ActivityEditor — pré-visualização", () => {
     expect(within(preview).getByText("Modo de teste")).toBeInTheDocument();
     expect(within(preview).getByRole("heading", { level: 1, name: "Qual é a letra a pequena?" })).toBeInTheDocument();
 
-    await user.click(within(preview).getByRole("button", { name: "a" }));
+    await user.click(within(preview).getByRole("button", { name: /^a, / }));
     expect(await within(preview).findByText(/Você achou: a\./)).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled(); // nada é gravado
 
