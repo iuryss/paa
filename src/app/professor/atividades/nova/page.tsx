@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, Hash, Map, Type } from "lucide-react";
+import { ArrowLeft, Hash, Map, MessageCircleQuestion, Type } from "lucide-react";
 import { auth } from "@/auth";
 import { ActivityEditor } from "@/components/activities/activity-editor";
 import { buttonVariants } from "@/components/ui/button";
@@ -14,6 +14,7 @@ const CHOICES: { module: SupportedModule; icon: React.ReactNode; text: string }[
   { module: "LOCALIZACAO", icon: <Map aria-hidden="true" className="size-8" strokeWidth={2.5} />, text: "A criança diz em que lado do mapa fica uma peça (Norte, Sul, Leste, Oeste)." },
   { module: "GRAFIA", icon: <Type aria-hidden="true" className="size-8" strokeWidth={2.5} />, text: "A criança liga a letra maiúscula à sua minúscula." },
   { module: "MATEMATICA", icon: <Hash aria-hidden="true" className="size-8" strokeWidth={2.5} />, text: "A criança conta maçãs e resolve somas pequenas (0 a 10)." },
+  { module: "LIVRE", icon: <MessageCircleQuestion aria-hidden="true" className="size-8" strokeWidth={2.5} />, text: "Você escreve as perguntas, um texto ou figura de apoio e as respostas, e marca qual é a certa." },
 ];
 
 export default async function NovaAtividadePage({
