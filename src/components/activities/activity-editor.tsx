@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Plus, Save, Trash2 } from "lucid
 import { useRouter } from "next/navigation";
 import { useId, useMemo, useState } from "react";
 import { ActivityRunner } from "@/components/activity-runner";
+import { NameRunner } from "@/components/name-runner";
 import { MarkerShape } from "@/components/marker-shape";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -32,6 +33,13 @@ import {
   markerFor,
   type MarkerStyle,
 } from "@/lib/activities/markers";
+import {
+  buildNameItem,
+  LETTER_CASE_LABEL,
+  LETTER_CASES,
+  MAX_EXTRA_LETTERS,
+  MAX_NAME_LETTERS,
+} from "@/lib/activities/name";
 import { shuffleItemOptions } from "@/lib/activities/shuffle";
 import { MODULE_LABEL } from "@/lib/dashboard/metrics";
 import { cn } from "@/lib/utils";
@@ -70,6 +78,82 @@ function IconSelect({
         ))}
       </select>
     </div>
+  );
+}
+
+/** Na pré-visualização não há aluno: um apelido de exemplo, curto como os de verdade. */
+const PREVIEW_NAME = "Sol";
+const PREVIEW_CALLBACKS = {
+  onStart: async () => ({ ok: false }) as const,
+  onRecord: async () => ({ ok: false }),
+  onFinish: async () => ({ ok: false }),
+};
+
+/** Escrever o nome: só a configuração (as letras vêm do apelido de cada aluno). */
+function NameFields({
+  id,
+  item,
+  onChange,
+}: {
+  id: string;
+  item: EditorItem;
+  onChange: (patch: Partial<EditorItem>) => void;
+}) {
+  return (
+    <>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor={`${id}-extra`}>Letras extras no quadro (para a criança escolher)</Label>
+        <select
+          id={`${id}-extra`}
+          value={item.nameExtra}
+          aria-describedby={`${id}-extra-hint`}
+          className={SELECT_CLASS}
+          onChange={(e) => onChange({ nameExtra: Number(e.target.value) })}
+        >
+          {Array.from({ length: MAX_EXTRA_LETTERS + 1 }, (_, n) => (
+            <option key={n} value={n}>
+              {n === 0 ? "Nenhuma (só as letras do nome)" : n}
+            </option>
+          ))}
+        </select>
+        <p id={`${id}-extra-hint`} className="text-label text-ink-muted">
+          As extras nunca são letras do nome da criança, então só existe um jeito certo.
+        </p>
+      </div>
+      <fieldset className="flex flex-col gap-3">
+        <legend className="mb-1 text-label">Letras</legend>
+        {LETTER_CASES.map((letterCase) => (
+          <label key={letterCase} className="flex items-center gap-3 text-body">
+            <input
+              type="radio"
+              name={`${id}-case`}
+              checked={item.nameCase === letterCase}
+              onChange={() => onChange({ nameCase: letterCase })}
+              className="size-6 shrink-0"
+            />
+            {LETTER_CASE_LABEL[letterCase]}
+          </label>
+        ))}
+      </fieldset>
+      <label className="flex items-start gap-3 text-body">
+        <input
+          type="checkbox"
+          checked={item.nameModel}
+          onChange={(e) => onChange({ nameModel: e.target.checked })}
+          className="mt-1 size-6 shrink-0"
+        />
+        <span>
+          Mostrar o nome como modelo desde o início
+          <span className="block text-label text-ink-muted">
+            Desmarcado, o modelo aparece quando a criança pede dica ou tenta duas letras diferentes.
+          </span>
+        </span>
+      </label>
+      <p className="text-label text-ink-muted">
+        Cada aluno monta o próprio apelido, como está no cadastro. Nomes compostos mantêm o espaço; com mais de{" "}
+        {MAX_NAME_LETTERS} letras, usamos só o primeiro nome.
+      </p>
+    </>
   );
 }
 
@@ -341,12 +425,18 @@ export function ActivityEditor({ module, activityId, initial, sessionCount = 0 }
     if (build()) setPreviewKey(Date.now());
   }
 
-  const previewItems = useMemo(() => {
+  const preview = useMemo(() => {
     if (previewKey === 0) return null;
     const parsed = parseActivityContent(module, toContent(module, items));
-    return parsed.success ? shuffleItemOptions(parsed.items) : null;
+    if (!parsed.success) return null;
+    if (parsed.name) {
+      const name = buildNameItem(PREVIEW_NAME, parsed.name);
+      return name ? { name, items: [] } : null;
+    }
+    return { name: null, items: shuffleItemOptions(parsed.items) };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recalcula só ao abrir a pré-visualização
   }, [previewKey]);
+  const isName = module === "NOME";
 
   return (
     <div className="flex flex-col gap-12">
@@ -382,6 +472,8 @@ export function ActivityEditor({ module, activityId, initial, sessionCount = 0 }
             ))}
           </select>
         </div>
+        {/* Escrever o nome não usa marcadores: a dica diz a letra e destaca a peça. */}
+        {!isName ? (
         <fieldset className="flex flex-col gap-3">
           <legend className="mb-1 text-label">Marcadores das respostas e das dicas</legend>
           {MARKER_STYLES.map((style) => (
@@ -421,6 +513,7 @@ export function ActivityEditor({ module, activityId, initial, sessionCount = 0 }
             No tema Foco Alto a criança sempre vê só as formas (o tema não usa cores).
           </p>
         </fieldset>
+        ) : null}
         <label className="flex items-center gap-3 text-body">
           <input
             type="checkbox"
@@ -441,17 +534,17 @@ export function ActivityEditor({ module, activityId, initial, sessionCount = 0 }
 
       <section aria-labelledby={`${uid}-items`} className="flex flex-col gap-6">
         <h2 id={`${uid}-items`} className="text-subtitle">
-          Itens de {MODULE_LABEL[module]} ({items.length})
+          {isName ? "Como a criança monta o nome" : `Itens de ${MODULE_LABEL[module]} (${items.length})`}
         </h2>
         <ol className="flex flex-col gap-6">
           {items.map((item, i) => {
             const id = `${uid}-i${i}`;
             return (
               <li key={i}>
-                <Card className="flex flex-col gap-6" role="group" aria-label={`Item ${i + 1}`}>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+                <Card className="flex flex-col gap-6" role="group" aria-label={isName ? "Configuração" : `Item ${i + 1}`}>
+                  <div className={cn("flex flex-wrap items-center justify-between gap-3", isName && "hidden")}>
                     <h3 className="text-subtitle">Item {i + 1}</h3>
-                    {!locked ? (
+                    {!locked && !isName ? (
                       <div className="flex gap-3">
                         <Button variant="icone" icon={ArrowUp} aria-label={`Subir item ${i + 1}`} disabled={i === 0} onClick={() => setItems((l) => move(l, i, i - 1))} />
                         <Button variant="icone" icon={ArrowDown} aria-label={`Descer item ${i + 1}`} disabled={i === items.length - 1} onClick={() => setItems((l) => move(l, i, i + 1))} />
@@ -462,13 +555,17 @@ export function ActivityEditor({ module, activityId, initial, sessionCount = 0 }
 
                   <fieldset disabled={locked} className="flex flex-col gap-6">
                     <div className="flex flex-col gap-2">
-                      <Label htmlFor={`${id}-prompt`}>Pergunta</Label>
+                      <Label htmlFor={`${id}-prompt`}>{isName ? "Pedido para a criança" : "Pergunta"}</Label>
                       <Input id={`${id}-prompt`} value={item.prompt} maxLength={120} onChange={(e) => patchItem(i, { prompt: e.target.value })} />
                     </div>
-                    <div className="flex flex-col gap-2">
-                      <Label htmlFor={`${id}-hint`}>Dica (opcional)</Label>
-                      <Input id={`${id}-hint`} value={item.hint} maxLength={120} onChange={(e) => patchItem(i, { hint: e.target.value })} />
-                    </div>
+                    {!isName ? (
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor={`${id}-hint`}>Dica (opcional)</Label>
+                        <Input id={`${id}-hint`} value={item.hint} maxLength={120} onChange={(e) => patchItem(i, { hint: e.target.value })} />
+                      </div>
+                    ) : null}
+
+                    {isName ? <NameFields id={id} item={item} onChange={(patch) => patchItem(i, patch)} /> : null}
 
                     {module === "LOCALIZACAO" ? (
                       <>
@@ -544,7 +641,7 @@ export function ActivityEditor({ module, activityId, initial, sessionCount = 0 }
             );
           })}
         </ol>
-        {!locked && items.length < MAX_ITEMS ? (
+        {!locked && !isName && items.length < MAX_ITEMS ? (
           <Button icon={Plus} className="self-start" onClick={() => setItems((l) => [...l, emptyItem(module)])}>
             Adicionar item
           </Button>
@@ -569,22 +666,32 @@ export function ActivityEditor({ module, activityId, initial, sessionCount = 0 }
         ) : null}
       </div>
 
-      {previewItems ? (
+      {preview ? (
         <section aria-label="Pré-visualização" className="flex flex-col gap-4">
           <Feedback tone="acerto" title="Modo de teste">
             Assim o aluno vê a atividade. Nada do que você responder aqui é gravado.
+            {preview.name ? ` Aqui usamos o nome de exemplo “${PREVIEW_NAME}”: cada aluno vê o próprio apelido.` : ""}
           </Feedback>
-          <ActivityRunner
-            key={previewKey}
-            activityId="preview"
-            title={title || "Pré-visualização"}
-            items={previewItems}
-            markerStyle={markerStyle}
-            onStart={async () => ({ ok: false })}
-            onRecord={async () => ({ ok: false })}
-            onFinish={async () => ({ ok: false })}
-            backHref="#"
-          />
+          {preview.name ? (
+            <NameRunner
+              key={previewKey}
+              activityId="preview"
+              title={title || "Pré-visualização"}
+              item={preview.name}
+              {...PREVIEW_CALLBACKS}
+              backHref="#"
+            />
+          ) : (
+            <ActivityRunner
+              key={previewKey}
+              activityId="preview"
+              title={title || "Pré-visualização"}
+              items={preview.items}
+              markerStyle={markerStyle}
+              {...PREVIEW_CALLBACKS}
+              backHref="#"
+            />
+          )}
         </section>
       ) : null}
 
