@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "jest-axe";
-import { DEFAULT_PREFERENCES } from "@/lib/preferences";
+import type { MarkerStyle } from "@/lib/activities/markers";
+import { DEFAULT_PREFERENCES, type Preferences } from "@/lib/preferences";
 import { parseActivityContent, type PlayItem } from "@/lib/validation/activities";
 import { AccessibilityProvider } from "./accessibility-provider";
 import { ActivityRunner } from "./activity-runner";
@@ -31,17 +32,22 @@ const letters: PlayItem[] = [
   },
 ];
 
-function setup(items: PlayItem[] = letters, contentMode: "textual" | "pictografico" = "textual") {
+function setup(
+  items: PlayItem[] = letters,
+  contentMode: "textual" | "pictografico" = "textual",
+  { markerStyle, theme = "calmo" }: { markerStyle?: MarkerStyle; theme?: Preferences["theme"] } = {},
+) {
   let clock = 1000;
   const onStart = jest.fn().mockResolvedValue({ ok: true, sessionId: "sess-123" });
   const onRecord = jest.fn().mockResolvedValue({ ok: true });
   const onFinish = jest.fn().mockResolvedValue({ ok: true });
   const utils = render(
-    <AccessibilityProvider initial={{ ...DEFAULT_PREFERENCES, contentMode }}>
+    <AccessibilityProvider initial={{ ...DEFAULT_PREFERENCES, contentMode, theme }}>
       <ActivityRunner
         activityId="act-123456"
         title="Letras"
         items={items}
+        markerStyle={markerStyle}
         onStart={onStart}
         onRecord={onRecord}
         onFinish={onFinish}
@@ -52,7 +58,9 @@ function setup(items: PlayItem[] = letters, contentMode: "textual" | "pictografi
   return { onStart, onRecord, onFinish, ...utils };
 }
 
-const option = (name: string | RegExp) => screen.getByRole("button", { name });
+/** O nome acessível da opção é "rótulo, marcador" (ex.: "a, círculo azul"). */
+const option = (label: string | RegExp) =>
+  screen.getByRole("button", { name: typeof label === "string" ? new RegExp(`^${label}, `) : label });
 
 describe("ActivityRunner — fluxo da criança", () => {
   it("mostra a pergunta, o passo e as opções, sem nenhum contador de erros", () => {
@@ -114,30 +122,70 @@ describe("ActivityRunner — fluxo da criança", () => {
     expect(onRecord.mock.calls[1]?.[1]).toMatchObject({ optionId: "l-a", attemptNo: 2 });
   });
 
-  it("depois de 2 redirecionamentos destaca a opção certa (dica visual) e registra a ajuda", async () => {
+  it("cada opção tem um marcador próprio (forma + nome), pela posição na tela", () => {
+    setup();
+    const buttons = screen.getAllByRole("button", { name: /, / });
+    expect(buttons.map((b) => b.getAttribute("data-marker"))).toEqual(["circulo", "triangulo", "quadrado"]);
+    expect(option("a")).toHaveAccessibleName("a, círculo azul");
+    expect(option("o")).toHaveAccessibleName("o, triângulo amarelo");
+    expect(option("a").querySelector("svg[data-marker='circulo'] path")).toHaveClass("fill-marker-azul");
+  });
+
+  it("depois de 2 redirecionamentos a dica aponta o marcador; no 3º a opção fica em destaque", async () => {
     const { onRecord } = setup();
     await userEvent.click(option("o"));
     await userEvent.click(option("e"));
 
-    expect(screen.getByRole("status")).toHaveTextContent("Olhe a opção marcada.");
-    expect(screen.getByText("Dica: esta opção")).toBeInTheDocument();
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Procure o círculo azul.");
+    expect(status.querySelector("svg[data-marker='circulo']")).toBeInTheDocument();
+    expect(option("a")).toHaveAccessibleName("a, círculo azul");
 
-    await userEvent.click(option(/^a/));
-    await waitFor(() => expect(onRecord).toHaveBeenCalledTimes(3));
+    await userEvent.click(option("o"));
+    expect(screen.getByRole("status")).toHaveTextContent("Toque no círculo azul, que está em destaque.");
+    expect(option("a")).toHaveAccessibleName("a, círculo azul. Dica: esta opção");
+
+    await userEvent.click(option("a"));
+    await waitFor(() => expect(onRecord).toHaveBeenCalledTimes(4));
     expect(onRecord.mock.calls[2]?.[1]).toMatchObject({ helpLevel: "VISUAL_HINT", attemptNo: 3 });
+    expect(onRecord.mock.calls[3]?.[1]).toMatchObject({ helpLevel: "VISUAL_HINT", attemptNo: 4 });
   });
 
-  it("botão Dica: 1º pedido mostra o texto, 2º destaca a resposta", async () => {
+  it("botão Dica: texto do professor → marcador → destaque", async () => {
     const { onRecord } = setup();
-    await userEvent.click(screen.getByRole("button", { name: "Dica" }));
+    const hint = () => screen.getByRole("button", { name: "Dica" });
+    await userEvent.click(hint());
     expect(screen.getByRole("status")).toHaveTextContent("A letra pequena parece com a grande.");
 
-    await userEvent.click(screen.getByRole("button", { name: "Dica" }));
-    expect(screen.getByText("Dica: esta opção")).toBeInTheDocument();
+    await userEvent.click(hint());
+    expect(screen.getByRole("status")).toHaveTextContent("Procure o círculo azul.");
+    expect(option("a")).toHaveAccessibleName("a, círculo azul");
 
-    await userEvent.click(option(/^a/));
+    await userEvent.click(hint());
+    expect(option("a")).toHaveAccessibleName("a, círculo azul. Dica: esta opção");
+
+    await userEvent.click(option("a"));
     await waitFor(() => expect(onRecord).toHaveBeenCalled());
     expect(onRecord.mock.calls[0]?.[1]).toMatchObject({ helpLevel: "VISUAL_HINT" });
+  });
+
+  it("estilo 'só cores': mesma forma em todas, a dica diz a cor", async () => {
+    setup(letters, "textual", { markerStyle: "CORES" });
+    expect(option("o")).toHaveAccessibleName("o, cor amarelo");
+    const shapes = screen.getAllByRole("button", { name: /, / }).map((b) => b.getAttribute("data-marker"));
+    expect(new Set(shapes)).toEqual(new Set(["circulo"]));
+    await userEvent.click(screen.getByRole("button", { name: "Dica" }));
+    await userEvent.click(screen.getByRole("button", { name: "Dica" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Procure a cor azul.");
+  });
+
+  it("tema Foco Alto: sempre só formas, sem cor, mesmo se o professor escolheu cores", async () => {
+    setup(letters, "textual", { markerStyle: "CORES", theme: "foco" });
+    expect(option("o")).toHaveAccessibleName("o, triângulo");
+    expect(document.querySelector("[class*='fill-marker-']")).toBeNull();
+    await userEvent.click(option("o"));
+    await userEvent.click(option("e"));
+    expect(screen.getByRole("status")).toHaveTextContent("Procure o círculo.");
   });
 
   it("avança para o próximo passo, move o foco para a pergunta e termina com Muito bem!", async () => {

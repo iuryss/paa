@@ -14,10 +14,12 @@ interface FeedbackProps {
    * false: use quando um pai já é a região live (ela precisa existir antes do texto mudar).
    */
   announce?: boolean;
+  /** Substitui o ícone padrão (ex.: o marcador que a dica aponta). Decorativo: o texto diz tudo. */
+  icon?: ReactNode;
 }
 
 /** Não existe estado de erro: ou acerto, ou convite gentil para tentar de novo. */
-export function Feedback({ tone, title, children, className, announce = true }: FeedbackProps) {
+export function Feedback({ tone, title, children, className, announce = true, icon }: FeedbackProps) {
   const Icon = tone === "acerto" ? CircleCheck : RotateCcw;
   return (
     <div
@@ -30,7 +32,7 @@ export function Feedback({ tone, title, children, className, announce = true }: 
         className,
       )}
     >
-      <Icon aria-hidden="true" className="size-8 shrink-0" strokeWidth={2.5} />
+      {icon ?? <Icon aria-hidden="true" className="size-8 shrink-0" strokeWidth={2.5} />}
       {/* div, não p: o conteúdo pode ter listas e outros blocos (HTML inválido causa erro de hidratação). */}
       <div>
         <strong className="block font-extrabold">{title}</strong>

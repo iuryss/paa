@@ -41,19 +41,26 @@ describe("answer", () => {
     expect(state.status).toBe("redirect");
     expect(state.redirects).toBe(1);
     expect(attempt).toMatchObject({ correct: false, attemptNo: 1, helpLevel: "NONE" });
-    expect(state.visualHint).toBe(false);
+    expect(state).toMatchObject({ markerHint: false, visualHint: false });
   });
 
-  it("depois de 2 redirecionamentos a dica visual aparece, mas só vale para a PRÓXIMA tentativa", () => {
+  it("depois de 2 redirecionamentos a dica do marcador aparece, mas só vale para a PRÓXIMA tentativa", () => {
     let s = initialItemState(0);
     s = answer(item, "l-o", s, 100).state;
     const second = answer(item, "l-e", s, 200);
     expect(second.attempt?.helpLevel).toBe("NONE"); // ainda não tinha visto a dica
-    expect(second.state.visualHint).toBe(true);
-    expect(second.state.help).toBe("VISUAL_HINT");
+    expect(second.state).toMatchObject({ markerHint: true, visualHint: false, help: "VISUAL_HINT" });
 
     const third = answer(item, "l-a", second.state, 300);
     expect(third.attempt).toMatchObject({ correct: true, attemptNo: 3, helpLevel: "VISUAL_HINT" });
+  });
+
+  it("no 3º redirecionamento a opção certa também fica destacada", () => {
+    let s = initialItemState(0);
+    s = answer(item, "l-o", s, 1).state;
+    s = answer(item, "l-e", s, 2).state;
+    s = answer(item, "l-o", s, 3).state;
+    expect(s).toMatchObject({ markerHint: true, visualHint: true, redirects: 3 });
   });
 
   it("depois de acertar, novas respostas são ignoradas", () => {
@@ -70,19 +77,22 @@ describe("answer", () => {
 });
 
 describe("requestHint", () => {
-  it("1º pedido: dica escrita (VERBAL_HINT); 2º: destaca a resposta (VISUAL_HINT)", () => {
+  it("1º pedido: dica escrita; 2º: aponta o marcador; 3º: destaca a resposta", () => {
     const first = requestHint(item, initialItemState(0));
-    expect(first).toMatchObject({ hintShown: true, visualHint: false, help: "VERBAL_HINT" });
+    expect(first).toMatchObject({ hintShown: true, markerHint: false, visualHint: false, help: "VERBAL_HINT" });
 
     const second = requestHint(item, first);
-    expect(second).toMatchObject({ visualHint: true, help: "VISUAL_HINT" });
+    expect(second).toMatchObject({ markerHint: true, visualHint: false, help: "VISUAL_HINT" });
+
+    const third = requestHint(item, second);
+    expect(third).toMatchObject({ markerHint: true, visualHint: true, help: "VISUAL_HINT" });
   });
 
-  it("sem texto de dica, vai direto para a dica visual", () => {
+  it("sem texto de dica, vai direto para a dica do marcador", () => {
     const { hint: _hint, ...noHint } = item;
     void _hint;
     const s = requestHint(noHint, initialItemState(0));
-    expect(s).toMatchObject({ visualHint: true, help: "VISUAL_HINT", hintShown: false });
+    expect(s).toMatchObject({ markerHint: true, visualHint: false, help: "VISUAL_HINT", hintShown: false });
   });
 
   it("não rebaixa a ajuda já usada e é ignorado após acertar", () => {
