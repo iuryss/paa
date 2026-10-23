@@ -146,6 +146,16 @@ Não faça:
 - **Redirecionamento** (substitui "erro") — `bg-retry-bg text-retry-ink border-2 border-retry-border`, ícone de seta circular/lâmpada + convite ("Quase! Tente perto da árvore."). O card volta sozinho, devagar, para a bandeja de origem (mola lenta). Nenhum som de falha. Após 2 tentativas, a dica fica mais concreta (ex.: o encaixe certo ganha `drop-active-border`); nunca revelar com punição.
 - Feedback aparece sempre no mesmo lugar (acima da área de ações), substitui o anterior e não some sozinho em menos de 4s — a criança fecha ou segue.
 
+## Marcadores das respostas (cor e forma)
+
+Cada resposta leva um marcador à esquerda do rótulo, e as dicas apontam para ele. Componente `MarkerShape`, lógica em `src/lib/activities/markers.ts`.
+
+- **Vagas fixas por posição:** 1ª `círculo azul`, 2ª `triângulo amarelo`, 3ª `quadrado verde`, 4ª `estrela roxa`. O marcador pertence à **posição na tela** (depois do embaralhamento no servidor), nunca à resposta: "triângulo" não vira sinônimo de "certo".
+- **Estilo escolhido pelo professor em cada atividade:** `CORES_E_FORMAS` (padrão), `FORMAS` (preenchimento `surface-sunken`, sem cor) ou `CORES` (todas círculo, a cor muda e a dica diz "a cor azul").
+- **Foco Alto é sempre `FORMAS`**, qualquer que seja a escolha: o tema é monocromático.
+- **Cor nunca sozinha:** contorno `ink` de 3px em toda forma (3:1 sobre `surface`, `success-bg` e `drop-active-bg`), e o nome do marcador entra no nome acessível da opção ("a, triângulo amarelo") e no texto da dica. Tokens `marker-azul`, `marker-amarelo`, `marker-verde`, `marker-roxo`.
+- **Escada de dicas:** (1) dica escrita do professor, se houver → (2) "Procure o triângulo amarelo." com o marcador desenhado no feedback → (3) "Toque no triângulo amarelo, que está em destaque." com a opção em `drop-active-*`. O botão **Dica** sobe um degrau por toque; 2 redirecionamentos seguidos chegam ao degrau 2 e 3 redirecionamentos ao degrau 3.
+
 ## Movimento
 
 - Só em resposta direta a um gesto (arrastar, soltar, tocar). Nada em loop, nada piscando, nada entrando sozinho na tela.

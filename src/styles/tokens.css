@@ -24,6 +24,10 @@
   --drop-border: #64748b;
   --drop-active-bg: #e0f2fe;
   --drop-active-border: #0369a1;
+  --marker-azul: #38bdf8;
+  --marker-amarelo: #fcd34d;
+  --marker-verde: #34d399;
+  --marker-roxo: #a78bfa;
   --focus-ring: #075985;
   --disabled-bg: #e2e8f0;
   --disabled-ink: #475569;
@@ -54,6 +58,10 @@
   --drop-border: #71717a;
   --drop-active-bg: #f0fdfa;
   --drop-active-border: #0f766e;
+  --marker-azul: #a1a1aa;
+  --marker-amarelo: #a1a1aa;
+  --marker-verde: #a1a1aa;
+  --marker-roxo: #a1a1aa;
   --focus-ring: #18181b;
   --disabled-bg: #e4e4e7;
   --disabled-ink: #52525b;
@@ -84,6 +92,10 @@
   --drop-border: #ffffff;
   --drop-active-bg: #18181b;
   --drop-active-border: #fde047;
+  --marker-azul: #7dd3fc;
+  --marker-amarelo: #fde047;
+  --marker-verde: #6ee7b7;
+  --marker-roxo: #c4b5fd;
   --focus-ring: #67e8f9;
   --disabled-bg: #18181b;
   --disabled-ink: #d4d4d8;
