@@ -1,22 +1,17 @@
 "use client";
 
-import Link from "next/link";
-import { ArrowLeft, ArrowRight, Check, Eye, Lightbulb, Volume2 } from "lucide-react";
+import { ArrowRight, Check, Eye, Lightbulb, Volume2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useAccessibility } from "@/components/accessibility-provider";
+import { ActivityDone, useActivitySession, type SessionCallbacks } from "@/components/activity-session";
 import { ActivityStimulus } from "@/components/activity-stimulus";
 import { AdaptiveLabel } from "@/components/adaptive-label";
 import { MarkerShape } from "@/components/marker-shape";
 import { Pictogram } from "@/components/pictogram";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Feedback } from "@/components/ui/feedback";
-import {
-  answer,
-  initialItemState,
-  requestHint,
-  type AttemptRecord,
-} from "@/lib/activities/runner";
+import { answer, initialItemState, requestHint } from "@/lib/activities/runner";
 import {
   DEFAULT_MARKER_STYLE,
   lookForText,
@@ -26,22 +21,15 @@ import {
   type MarkerStyle,
 } from "@/lib/activities/markers";
 import { canSpeak, speak } from "@/lib/speech";
-import type { AttemptInput } from "@/lib/validation/telemetry";
 import type { PlayItem } from "@/lib/validation/activities";
 import { cn } from "@/lib/utils";
 
-type StartResult = { ok: true; sessionId: string } | { ok: false };
-
-interface ActivityRunnerProps {
+interface ActivityRunnerProps extends SessionCallbacks {
   activityId: string;
   title: string;
   items: PlayItem[];
   /** Escolha do professor. No tema Foco Alto vira só formas. */
   markerStyle?: MarkerStyle;
-  /** Server Actions (ou dublês nos testes). Falhas de telemetria nunca travam a criança. */
-  onStart: (activityId: string) => Promise<StartResult>;
-  onRecord: (sessionId: string, attempt: AttemptInput) => Promise<{ ok: boolean }>;
-  onFinish: (sessionId: string) => Promise<{ ok: boolean }>;
   now?: () => number;
   backHref?: string;
 }
@@ -50,16 +38,6 @@ function optionTextClass(stimulus: PlayItem["stimulus"]): string {
   if (stimulus.kind === "letter") return "font-letra text-letra-bastao";
   if (stimulus.kind === "count") return "text-numeral";
   return "text-button";
-}
-
-function toInput(a: AttemptRecord): AttemptInput {
-  return {
-    itemKey: a.itemKey,
-    optionId: a.optionId,
-    helpLevel: a.helpLevel,
-    elapsedMs: a.elapsedMs,
-    attemptNo: a.attemptNo,
-  };
 }
 
 export function ActivityRunner({
@@ -80,8 +58,7 @@ export function ActivityRunner({
   const [done, setDone] = useState(false);
   const [canListen, setCanListen] = useState(false);
 
-  const session = useRef<Promise<string | null> | null>(null);
-  const queue = useRef<Promise<void>>(Promise.resolve());
+  const { send, finish } = useActivitySession(activityId, { onStart, onRecord, onFinish });
   const heading = useRef<HTMLHeadingElement>(null);
   const next = useRef<HTMLButtonElement>(null);
   const firstRender = useRef(true);
@@ -105,26 +82,6 @@ export function ActivityRunner({
 
   if (!item) return null;
 
-  /** A sessão só abre na 1ª resposta (evita sessões vazias e duplicadas pelo Strict Mode). */
-  const ensureSession = (): Promise<string | null> => {
-    session.current ??= onStart(activityId).then(
-      (r) => (r.ok ? r.sessionId : null),
-      () => null,
-    );
-    return session.current;
-  };
-
-  const send = (attempt: AttemptRecord) => {
-    queue.current = queue.current.then(async () => {
-      try {
-        const sessionId = await ensureSession();
-        if (sessionId) await onRecord(sessionId, toInput(attempt));
-      } catch {
-        // Telemetria é best-effort: a atividade continua.
-      }
-    });
-  };
-
   const choose = (optionId: string) => {
     const result = answer(item, optionId, state, now());
     if (!result.attempt) return;
@@ -139,31 +96,10 @@ export function ActivityRunner({
       return;
     }
     setDone(true);
-    await queue.current;
-    try {
-      const sessionId = await session.current;
-      if (sessionId) await onFinish(sessionId);
-    } catch {
-      // idem: não bloqueia a conclusão
-    }
+    await finish();
   };
 
-  if (done) {
-    return (
-      <section className="flex flex-col gap-12" aria-labelledby="fim">
-        <h1 id="fim" tabIndex={-1} ref={(el) => el?.focus()} className="text-display">
-          Muito bem!
-        </h1>
-        <Feedback tone="acerto" title="Você terminou!">
-          {title}
-        </Feedback>
-        <Link href={backHref} className={cn(buttonVariants({ variant: "principal" }), "self-start")}>
-          <ArrowLeft aria-hidden="true" className="size-7" strokeWidth={2.5} />
-          Voltar
-        </Link>
-      </section>
-    );
-  }
+  if (done) return <ActivityDone title={title} backHref={backHref} />;
 
   // O marcador é da POSIÇÃO (as opções já chegam embaralhadas do servidor).
   const markers = item.options.map((_, i) => markerFor(i, style));

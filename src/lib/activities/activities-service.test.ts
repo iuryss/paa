@@ -69,6 +69,25 @@ describe("queries", () => {
     expect(playable).not.toHaveProperty("content");
   });
 
+  it("Escrever o nome: monta o quadro com o apelido do aluno (sem itens de escolha)", async () => {
+    const nome = { items: [{ key: "nome", prompt: "Escreva seu nome", extraLetters: 2, letterCase: "MAIUSCULAS", showModel: true }] };
+    m.assignmentFindFirst.mockResolvedValue({
+      activity: { id: "n1", title: "Meu nome", module: "NOME", difficulty: "INICIAL", instruction: "Monte", content: nome },
+      student: { displayName: "Sol" },
+    });
+    const playable = await getPlayableActivity("stu1", "n1");
+    expect(playable?.items).toEqual([]);
+    expect(playable?.name?.cells.map((c) => (c.kind === "letter" ? c.letter : c.char))).toEqual(["S", "O", "L"]);
+    expect(playable?.name?.tiles).toHaveLength(5);
+    expect(m.assignmentFindFirst.mock.calls[0]?.[0].select.student).toEqual({ select: { displayName: true } });
+
+    m.assignmentFindFirst.mockResolvedValue({
+      activity: { id: "n1", title: "Meu nome", module: "NOME", difficulty: "INICIAL", instruction: "Monte", content: nome },
+      student: { displayName: "123" },
+    });
+    expect((await getPlayableActivity("stu1", "n1"))?.name).toBeNull();
+  });
+
   it("devolve null se não atribuída ou se o conteúdo está inválido", async () => {
     m.assignmentFindFirst.mockResolvedValueOnce(null);
     await expect(getPlayableActivity("stu1", "a1")).resolves.toBeNull();

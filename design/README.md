@@ -156,6 +156,16 @@ Cada resposta leva um marcador à esquerda do rótulo, e as dicas apontam para e
 - **Cor nunca sozinha:** contorno `ink` de 3px em toda forma (3:1 sobre `surface`, `success-bg` e `drop-active-bg`), e o nome do marcador entra no nome acessível da opção ("a, triângulo amarelo") e no texto da dica. Tokens `marker-azul`, `marker-amarelo`, `marker-verde`, `marker-roxo`.
 - **Escada de dicas:** (1) dica escrita do professor, se houver → (2) "Procure o triângulo amarelo." com o marcador desenhado no feedback → (3) "Toque no triângulo amarelo, que está em destaque." com a opção em `drop-active-*`. O botão **Dica** sobe um degrau por toque; 2 redirecionamentos seguidos chegam ao degrau 2 e 3 redirecionamentos ao degrau 3.
 
+## Arrastar e soltar (Escrever o nome)
+
+Componente `NameRunner`. O mesmo padrão vale para os próximos arrastos (ex.: lugares no mapa).
+
+- **Arrastar nunca é o único jeito** (WCAG 2.5.1 e 2.1.1): tocar na peça a coloca na próxima casa, e Tab + Enter faz o mesmo. O arrasto só começa depois de 8 px de movimento, então um toque rápido continua sendo toque.
+- **Um alvo por vez:** as casas se preenchem da esquerda para a direita. A casa atual tem borda tracejada `drop-active-border` sobre `drop-active-bg`; as vazias, `drop-border` tracejada; as preenchidas, `success-*`. Todo o nome é a área de soltar (fica `drop-active-*` com a peça em cima).
+- **Peças** de 88 px (`target-lg`), letra `letra-bastao`, 24 px entre elas. A peça usada deixa um contorno tracejado `border-subtle` no lugar, para as outras não mudarem de posição.
+- **Letra diferente volta** para o quadro, sem animação nem som, com "Quase!". Soltar fora do nome também devolve a peça, sem contar tentativa.
+- O foco vai sempre para a próxima peça livre (ou para **Terminar**), nunca se perde. O leitor de tela ouve cada casa ("Casa 2: a próxima") e os avisos do arrasto em português.
+
 ## Movimento
 
 - Só em resposta direta a um gesto (arrastar, soltar, tocar). Nada em loop, nada piscando, nada entrando sozinho na tela.

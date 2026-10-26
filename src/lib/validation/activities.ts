@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { DEFAULT_MARKER_STYLE, MARKER_STYLES } from "@/lib/activities/markers";
+import { LETTER_CASES, MAX_EXTRA_LETTERS, type NameConfig } from "@/lib/activities/name";
 import { sanitizeText } from "@/lib/sanitize";
 
-export const SUPPORTED_MODULES = ["LOCALIZACAO", "GRAFIA", "MATEMATICA", "LIVRE"] as const;
+export const SUPPORTED_MODULES = ["LOCALIZACAO", "GRAFIA", "MATEMATICA", "LIVRE", "NOME"] as const;
 export type SupportedModule = (typeof SUPPORTED_MODULES)[number];
 
 export const DIRECTIONS = ["norte", "sul", "leste", "oeste"] as const;
@@ -169,6 +170,24 @@ export const contentSchemas = {
   GRAFIA: content(grafiaItem),
   MATEMATICA: content(matematicaItem),
   LIVRE: content(livreItem),
+  // Uma configuração só: o nome (e portanto as letras) vem de cada aluno na hora de jogar.
+  NOME: z
+    .object({
+      items: z
+        .array(
+          z
+            .object({
+              key: z.literal("nome"),
+              prompt: text(120),
+              extraLetters: z.number().int().min(0).max(MAX_EXTRA_LETTERS),
+              letterCase: z.enum(LETTER_CASES),
+              showModel: z.boolean(),
+            })
+            .strict(),
+        )
+        .length(1),
+    })
+    .strict(),
 } as const;
 
 export function isSupportedModule(value: string): value is SupportedModule {
@@ -203,7 +222,8 @@ function stimulusFor(module: SupportedModule, item: RawItem): Stimulus {
 }
 
 export type ParsedContent =
-  | { success: true; content: unknown; items: PlayItem[] }
+  /** `name` só no módulo NOME (que não tem itens de escolha: o quadro é montado por aluno). */
+  | { success: true; content: unknown; items: PlayItem[]; name?: NameConfig }
   | { success: false };
 
 /** Valida o JSON do banco/da API e devolve o conteúdo já sanitizado + os itens normalizados. */
@@ -211,6 +231,10 @@ export function parseActivityContent(module: string, raw: unknown): ParsedConten
   if (!isSupportedModule(module)) return { success: false };
   const result = contentSchemas[module].safeParse(raw);
   if (!result.success) return { success: false };
+  if (module === "NOME") {
+    const name = (result.data as { items: NameConfig[] }).items[0]!;
+    return { success: true, content: result.data, items: [], name };
+  }
 
   const data = result.data as { items: RawItem[] };
   const items: PlayItem[] = data.items.map((item) => ({

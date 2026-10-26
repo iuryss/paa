@@ -1,4 +1,5 @@
 import { MAX_MARKERS } from "@/lib/activities/markers";
+import { MAX_EXTRA_LETTERS, type LetterCase } from "@/lib/activities/name";
 import {
   DIRECTIONS,
   ICON_NAMES,
@@ -20,6 +21,10 @@ export interface EditorAnswer {
  * Perguntas livres: o professor escreve TODAS as respostas e marca a certa (sempre há uma marcada).
  */
 export interface EditorItem {
+  /** Escrever o nome: quantas letras extras, maiúsculas ou como cadastrado, e se o modelo aparece. */
+  nameExtra: number;
+  nameCase: LetterCase;
+  nameModel: boolean;
   /** Perguntas livres: texto e figura de apoio (opcionais). */
   supportText: string;
   supportIcon: IconName | "";
@@ -100,6 +105,9 @@ const emptyAnswer = (): EditorAnswer => ({ label: "", icon: "" });
 
 export function emptyItem(module: SupportedModule): EditorItem {
   const base: EditorItem = {
+    nameExtra: 3,
+    nameCase: "MAIUSCULAS",
+    nameModel: true,
     supportText: "",
     supportIcon: "",
     answers: [],
@@ -117,6 +125,7 @@ export function emptyItem(module: SupportedModule): EditorItem {
   if (module === "GRAFIA") return { ...base, distractors: ["", ""] };
   if (module === "MATEMATICA") return { ...base, distractors: ["", ""] };
   if (module === "LIVRE") return { ...base, answers: [emptyAnswer(), emptyAnswer()] };
+  if (module === "NOME") return { ...base, prompt: "Escreva seu nome" };
   return base;
 }
 
@@ -190,6 +199,15 @@ export function toContent(module: SupportedModule, items: EditorItem[]): { items
           correctId: item.position,
         };
       }
+      if (module === "NOME") {
+        return {
+          key: "nome",
+          prompt: item.prompt.trim(),
+          extraLetters: item.nameExtra,
+          letterCase: item.nameCase,
+          showModel: item.nameModel,
+        };
+      }
       if (module === "LIVRE") {
         const labels = item.answers.map((a) => a.label.trim());
         const ids = uniqueIds("o", labels);
@@ -221,8 +239,12 @@ export function toContent(module: SupportedModule, items: EditorItem[]): { items
 interface StoredItem {
   prompt: string;
   hint?: string;
-  options: { id: string; label: string; icon?: IconName }[];
-  correctId: string;
+  /** Ausentes no módulo NOME (só configuração). */
+  options?: { id: string; label: string; icon?: IconName }[];
+  correctId?: string;
+  extraLetters?: number;
+  letterCase?: LetterCase;
+  showModel?: boolean;
   support?: string;
   supportIcon?: IconName;
   piece?: { label: string; icon?: IconName };
@@ -235,25 +257,31 @@ interface StoredItem {
 /** JSON já validado → editor (para abrir uma atividade existente). */
 export function fromContent(module: SupportedModule, content: unknown): EditorItem[] {
   const items = ((content as { items?: StoredItem[] } | null)?.items ?? []) as StoredItem[];
-  return items.map((s) => ({
-    ...emptyItem(module),
-    prompt: s.prompt,
-    hint: s.hint ?? "",
-    distractors:
-      module === "GRAFIA" || module === "MATEMATICA"
-        ? s.options.filter((o) => o.id !== s.correctId).map((o) => o.label)
-        : [],
-    supportText: s.support ?? "",
-    supportIcon: s.supportIcon ?? "",
-    answers: module === "LIVRE" ? s.options.map((o) => ({ label: o.label, icon: o.icon ?? "" })) : [],
-    correctIndex: module === "LIVRE" ? Math.max(0, s.options.findIndex((o) => o.id === s.correctId)) : 0,
-    display: s.display ?? "",
-    a: s.a ?? 1,
-    b: s.b ?? 1,
-    pieceLabel: s.piece?.label ?? "",
-    pieceIcon: s.piece?.icon ?? "",
-    position: s.position ?? "norte",
-  }));
+  return items.map((s) => {
+    const options = s.options ?? [];
+    return {
+      ...emptyItem(module),
+      prompt: s.prompt,
+      hint: s.hint ?? "",
+      distractors:
+        module === "GRAFIA" || module === "MATEMATICA"
+          ? options.filter((o) => o.id !== s.correctId).map((o) => o.label)
+          : [],
+      nameExtra: s.extraLetters ?? 3,
+      nameCase: s.letterCase ?? "MAIUSCULAS",
+      nameModel: s.showModel ?? true,
+      supportText: s.support ?? "",
+      supportIcon: s.supportIcon ?? "",
+      answers: module === "LIVRE" ? options.map((o) => ({ label: o.label, icon: o.icon ?? "" })) : [],
+      correctIndex: module === "LIVRE" ? Math.max(0, options.findIndex((o) => o.id === s.correctId)) : 0,
+      display: s.display ?? "",
+      a: s.a ?? 1,
+      b: s.b ?? 1,
+      pieceLabel: s.piece?.label ?? "",
+      pieceIcon: s.piece?.icon ?? "",
+      position: s.position ?? "norte",
+    };
+  });
 }
 
 /**
@@ -262,6 +290,16 @@ export function fromContent(module: SupportedModule, content: unknown): EditorIt
  */
 export function validateItems(module: SupportedModule, items: EditorItem[]): string[] {
   const errors: string[] = [];
+  if (module === "NOME") {
+    // Uma configuração só; as letras vêm do apelido de cada aluno.
+    if (items.length !== 1) errors.push("Esta atividade tem uma configuração só.");
+    const item = items[0];
+    if (item && !item.prompt.trim()) errors.push("Escreva o pedido para a criança (ex.: Escreva seu nome).");
+    if (item && (!Number.isInteger(item.nameExtra) || item.nameExtra < 0 || item.nameExtra > MAX_EXTRA_LETTERS)) {
+      errors.push(`Use de 0 a ${MAX_EXTRA_LETTERS} letras extras.`);
+    }
+    return errors;
+  }
   if (items.length === 0) errors.push("Adicione pelo menos 1 item.");
   if (items.length > MAX_ITEMS) errors.push(`Use no máximo ${MAX_ITEMS} itens.`);
 

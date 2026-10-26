@@ -221,6 +221,39 @@ describe("ActivityEditor — itens", () => {
     });
   });
 
+  it("Escrever o nome: só a configuração, sem marcadores nem itens; pré-visualiza com 'Sol' e salva", async () => {
+    reply(201, { id: "nome123456" });
+    const user = userEvent.setup();
+    setup("NOME", {
+      initial: { title: "", instruction: "", difficulty: "INICIAL", published: false, items: [emptyItem("NOME")] },
+    });
+    expect(screen.queryByRole("group", { name: "Marcadores das respostas e das dicas" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Adicionar item" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Remover item/ })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Pedido para a criança")).toHaveValue("Escreva seu nome");
+
+    await fillMeta(user);
+    await user.selectOptions(screen.getByLabelText(/Letras extras no quadro/), "2");
+    await user.click(screen.getByRole("radio", { name: "Como o apelido está cadastrado" }));
+    await user.click(screen.getByRole("checkbox", { name: /Mostrar o nome como modelo/ }));
+
+    await user.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+    const preview = screen.getByRole("region", { name: "Pré-visualização" });
+    expect(within(preview).getByText(/nome de exemplo “Sol”/)).toBeInTheDocument();
+    expect(within(preview).getAllByRole("button", { name: /^Letra / })).toHaveLength(5); // S, o, l + 2 extras
+    await user.click(within(preview).getByRole("button", { name: "Letra S" }));
+    expect(within(preview).getByText("A letra S.")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body);
+    expect(body).toMatchObject({ module: "NOME" });
+    expect(body.content).toEqual({
+      items: [{ key: "nome", prompt: "Escreva seu nome", extraLetters: 2, letterCase: "COMO_CADASTRADO", showModel: false }],
+    });
+  });
+
   it("Perguntas livres: resposta vazia é apontada antes de salvar", async () => {
     const user = userEvent.setup();
     setup("LIVRE");
@@ -345,5 +378,8 @@ describe("ActivityEditor — acessibilidade", () => {
     c.unmount();
     const d = setup("LIVRE", { initial: { ...filled, items: [emptyItem("LIVRE")] } });
     expect(await axe(d.container)).toHaveNoViolations();
+    d.unmount();
+    const e = setup("NOME", { initial: { ...filled, items: [emptyItem("NOME")] } });
+    expect(await axe(e.container)).toHaveNoViolations();
   });
 });

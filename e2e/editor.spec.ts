@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { OTHER_TEACHER, prisma, resetAndSeed, seedCompletedSessions, STUDENT, TEACHER, type Seeded } from "./helpers/data";
+import { LOCK_STUDENT, OTHER_TEACHER, prisma, resetAndSeed, seedCompletedSessions, STUDENT, TEACHER, type Seeded } from "./helpers/data";
 import { loginAdult, loginStudent, option } from "./helpers/ui";
 
 let seed: Seeded;
@@ -171,4 +171,41 @@ test("professor cria uma pergunta livre, marca a resposta certa e o aluno joga",
   await option(kid, "Sol").click();
   await expect(kid.getByRole("status").filter({ hasText: "Isso!" })).toBeVisible();
   await child.close();
+});
+
+test("professor cria 'Escrever o nome' uma vez e cada aluno monta o próprio apelido", async ({ page, browser }) => {
+  await loginAdult(page, TEACHER.email, TEACHER.password);
+  await page.goto("/professor/atividades/nova");
+  await page.getByRole("link", { name: /Escrever o nome/ }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Nova atividade de Escrever o nome" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Marcadores das respostas e das dicas" })).toHaveCount(0);
+
+  await page.getByLabel("Título").fill("Meu nome em letra de forma");
+  await page.getByLabel("Instrução curta").fill("Monte seu nome");
+  await page.getByLabel(/Letras extras no quadro/).selectOption("1");
+  await page.getByLabel(/Publicada/).check();
+
+  await page.getByRole("button", { name: "Pré-visualizar" }).click();
+  const preview = page.getByRole("region", { name: "Pré-visualização" });
+  await expect(preview.getByText(/nome de exemplo “Sol”/)).toBeVisible();
+  await expect(preview.getByRole("group", { name: "Letras" }).getByRole("button")).toHaveCount(4);
+  await page.getByRole("button", { name: "Fechar pré-visualização" }).click();
+
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await expect(page).toHaveURL(/\/professor\/atividades\/[A-Za-z0-9]+$/);
+  const saved = await prisma.activity.findFirst({ where: { title: "Meu nome em letra de forma" } });
+  expect(saved).toMatchObject({ module: "NOME", published: true });
+
+  // A mesma atividade para dois alunos: cada um vê as letras do PRÓPRIO apelido.
+  for (const s of [{ id: seed.studentId, login: STUDENT, letters: "SOL" }, { id: seed.lockStudentId, login: LOCK_STUDENT, letters: "LUA" }]) {
+    await prisma.assignment.create({ data: { activityId: saved!.id, studentId: s.id, assignedBy: seed.teacherId } });
+    const ctx = await browser.newContext();
+    const kid = await ctx.newPage();
+    await loginStudent(kid, s.login.code, s.login.pin);
+    await kid.goto(`/aluno/atividades/${saved!.id}`);
+    const letters = await kid.getByRole("group", { name: "Letras" }).locator("[data-tile]").evaluateAll((els) => els.map((el) => el.getAttribute("data-tile")));
+    expect(letters).toHaveLength(4);
+    for (const c of s.letters) expect(letters).toContain(c);
+    await ctx.close();
+  }
 });
