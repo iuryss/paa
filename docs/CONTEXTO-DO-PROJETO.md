@@ -11,7 +11,7 @@ Plataforma educacional **adaptativa para crianças com Transtorno do Espectro Au
 - **Aluno (criança):** faz atividades curtas e vê só mensagens positivas. Nunca vê "erro": existe "Quase!" e "tente de novo", com dicas que aumentam aos poucos.
 - **Professor / terapeuta:** acompanha a evolução de cada aluno, cria atividades e define o perfil sensorial de cada criança.
 
-Módulos pedagógicos: **Localização espacial** (mapa N/S/L/O), **Grafia/alfabetização** (letras), **Matemática básica** (contagem e soma), **Perguntas livres** (o professor escreve tudo) e **Escrever o nome** (arrastar ou tocar nas letras do próprio apelido).
+Módulos pedagógicos: **Localização espacial** (mapa N/S/L/O), **Grafia/alfabetização** (letras), **Matemática básica** (contagem e soma), **Folha de exercícios** (o professor escreve a leitura e os exercícios, como numa folha do caderno) e **Escrever o nome** (arrastar ou tocar nas letras do próprio apelido).
 
 Princípios inegociáveis:
 - **LGPD:** nenhum dado pessoal da criança (sem nome completo, e-mail, CPF, foto). O aluno entra com um *código* e um *PIN*.
@@ -37,7 +37,7 @@ Design: veio de um artefato no Claude Design e foi copiado para `design/` (`toke
 - Painel com cartões dos alunos, relatório por aluno (autonomia, tendência, tempo, ajuda) e gráficos.
 - **Sessões interrompidas** (ver 6.5): aviso no cartão e tabela no relatório.
 - Editor de atividades (criar, editar, duplicar) dos 5 módulos (inclui **Escrever o nome**, ver seção 11). Qualquer profissional pode publicar; cabe ao professor do aluno decidir o que usar.
-- **Perguntas livres** (`LIVRE`): o professor escreve a pergunta, um texto de apoio opcional (até 300 caracteres) e uma figura de apoio opcional, de 2 a 4 respostas (cada uma pode ter figura) e marca qual é a certa. As figuras vêm da lista fechada `ICON_NAMES` (35 pictogramas, sem URL externa nem upload). O servidor continua conferindo a resposta pelo conteúdo salvo.
+- **Folha de exercícios** (`FOLHA`, substituiu as "Perguntas livres" `LIVRE`, convertidas pela migração `20261028120100`): bloco de apoio no topo (leitura de até 800 caracteres com `**destaques**`, figura e exemplo resolvido), sempre à vista, e até 12 exercícios misturados: **escolha** (2–4 respostas, uma certa), **marcar todas** (2–4, várias certas, cada toque conferido na hora) e **verdadeiro ou falso** (1–6 frases, uma por vez; chave de telemetria `item-N-sK`). Cada exercício pode ter apoio próprio. As figuras vêm da lista fechada `ICON_NAMES` (35 pictogramas, sem URL externa nem upload). O servidor confere tudo pelo conteúdo salvo (`isCorrectOption`).
 - Em cada atividade o professor escolhe o estilo dos marcadores (`Activity.markerStyle`: cores e formas, só formas ou só cores). O estilo pode mudar mesmo com a atividade travada por sessões.
 - Perfil sensorial do aluno definido pelo professor, sem mudar a tela do próprio professor.
 - *Minha conta:* trocar senha e convidar colegas. (O painel técnico "Verificação do sistema" e o e-mail de teste foram **removidos** a pedido: diagnóstico agora é pelos logs da Vercel.)
@@ -124,7 +124,7 @@ Provedores: `console` (só desenvolvimento), `gmail` (SMTP do Gmail com **senha 
 
 Feito em 3 etapas, cada uma num PR:
 1. **Marcadores de cor/forma e escada de dicas** (PR #1).
-2. **Perguntas livres** (PR #2), com as correções de tema após o login, microtransição do movimento reduzido e confirmação de atribuição.
+2. **Perguntas livres** (PR #2, hoje convertidas em Folha), com as correções de tema após o login, microtransição do movimento reduzido e confirmação de atribuição.
 3. **Escrever o próprio nome** (`NOME`): a criança monta o apelido (`User.displayName`) com letras soltas.
    - Uma atividade serve para todos os alunos: o conteúdo guarda só a configuração (letras extras 0–6, maiúsculas ou como cadastrado, modelo visível ou não).
    - O servidor monta o quadro por aluno (`buildNameItem`) e confere cada letra (`checkNameAttempt`): o id da peça codifica a letra (`c65-0` = A) e a casa é `letra-N`. Qualquer peça com a letra certa vale.
@@ -132,6 +132,8 @@ Feito em 3 etapas, cada uma num PR:
    - Três jeitos de colocar, todos pela mesma função (`placeTile`): **tocar** (vai para a próxima casa), **teclado** (Tab + Enter) e **arrastar** com `@dnd-kit/core` (soltar em qualquer ponto do nome; fora dele, a letra volta e nada é gravado). Uma casa por vez, da esquerda para a direita.
    - Escada de dicas por casa: "A próxima letra é S." com o nome-modelo → peça em destaque. 2 letras diferentes chegam ao 1º degrau; 3, ao 2º.
    - A telemetria e a tela final são compartilhadas com as outras atividades (`useActivitySession` e `ActivityDone`, em `src/components/activity-session.tsx`).
+
+4. **Folha de exercícios** (`FOLHA`), a partir da análise dos materiais adaptados de Ciências e Matemática do 9º ano: o plano é cobrir a maioria dos formatos das folhas em papel com 3 motores (selecionar, encaixar, digitar). Próximas etapas: 5) imagens do professor (guardadas no banco, com limite de tamanho e aviso de não enviar fotos de alunos); 6) completar lacunas com banco de palavras e associar/ligar pares (com a linha desenhada); 7) classificar em grupos, ordenar, nomear imagens; 8) resposta numérica e notação matemática, marcar no texto. Depois: caça-palavras e decifrar código. Fica de fora: desenhar, contornar, cruzadinha. Os materiais em papel são licenciados ("proibido compartilhamento"): a plataforma oferece os formatos e os professores digitam o próprio conteúdo, nada é importado. O modo para adolescentes (sem pictogramas infantis) ficou para depois.
 
 Ainda não feito: **arrastar lugares no mapa** (o arrastar já nasceu reaproveitável). Outros itens do "grupo 3", mantidos para depois: módulo de Ciências, fonte cursiva, pictogramas PECS reais, o som (efeitos). Arrastar com o dedo num tablet de verdade ainda não foi testado (o e2e cobre mouse, toque simples e teclado).
 
