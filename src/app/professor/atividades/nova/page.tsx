@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, Hash, Map, MessageCircleQuestion, PenLine, Type } from "lucide-react";
+import { ArrowLeft, Hash, Map, NotebookPen, PenLine, Type } from "lucide-react";
 import { auth } from "@/auth";
 import { ActivityEditor } from "@/components/activities/activity-editor";
 import { buttonVariants } from "@/components/ui/button";
@@ -14,7 +14,7 @@ const CHOICES: { module: SupportedModule; icon: React.ReactNode; text: string }[
   { module: "LOCALIZACAO", icon: <Map aria-hidden="true" className="size-8" strokeWidth={2.5} />, text: "A criança diz em que lado do mapa fica uma peça (Norte, Sul, Leste, Oeste)." },
   { module: "GRAFIA", icon: <Type aria-hidden="true" className="size-8" strokeWidth={2.5} />, text: "A criança liga a letra maiúscula à sua minúscula." },
   { module: "MATEMATICA", icon: <Hash aria-hidden="true" className="size-8" strokeWidth={2.5} />, text: "A criança conta maçãs e resolve somas pequenas (0 a 10)." },
-  { module: "LIVRE", icon: <MessageCircleQuestion aria-hidden="true" className="size-8" strokeWidth={2.5} />, text: "Você escreve as perguntas, um texto ou figura de apoio e as respostas, e marca qual é a certa." },
+  { module: "FOLHA", icon: <NotebookPen aria-hidden="true" className="size-8" strokeWidth={2.5} />, text: "Como uma folha do caderno: um texto de apoio (com palavras em destaque e exemplo) e exercícios de escolha, marcar todas as certas e verdadeiro ou falso." },
   { module: "NOME", icon: <PenLine aria-hidden="true" className="size-8" strokeWidth={2.5} />, text: "A criança monta o próprio apelido arrastando (ou tocando) as letras na ordem certa. Uma atividade serve para todos os alunos." },
 ];
 

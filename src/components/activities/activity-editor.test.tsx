@@ -181,44 +181,108 @@ describe("ActivityEditor — itens", () => {
     expect(item.options.map((o: { id: string }) => o.id)).toEqual(["norte", "sul", "leste", "oeste"]);
   });
 
-  it("Perguntas livres: o professor escreve o apoio, as respostas e marca a certa", async () => {
-    reply(201, { id: "livre12345" });
+  it("Folha: leitura de apoio com destaque e os 3 tipos de exercício, salvos do jeito certo", async () => {
+    reply(201, { id: "folha12345" });
     const user = userEvent.setup();
-    setup("LIVRE");
+    setup("FOLHA", {
+      initial: { title: "", instruction: "", difficulty: "INICIAL", published: false, items: [emptyItem("FOLHA", "escolha")] },
+    });
     await fillMeta(user);
-    await user.type(screen.getByLabelText("Pergunta"), "Qual bicho late?");
-    await user.type(screen.getByLabelText("Texto de apoio (opcional)"), "Na casa da Ana tem um bicho.");
-    expect(screen.getByText(/28 de 300 letras/)).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText("Figura de apoio"), "casa");
 
-    // Começa com 2 respostas; a 1ª vem marcada e não dá para ficar com menos de 2.
-    expect(screen.getByRole("radio", { name: "Resposta 1: esta é a certa" })).toBeChecked();
-    expect(screen.getByRole("button", { name: "Remover resposta 1" })).toBeDisabled();
-    await user.type(screen.getByLabelText("Texto da resposta 1"), "Gato");
-    await user.type(screen.getByLabelText("Texto da resposta 2"), "Cachorro");
-    await user.selectOptions(screen.getByLabelText("Figura da resposta 2"), "cachorro");
-    await user.click(screen.getByRole("button", { name: "Adicionar resposta" }));
-    await user.type(screen.getByLabelText("Texto da resposta 3"), "Peixe");
-    await user.click(screen.getByRole("radio", { name: "Resposta 2: esta é a certa" }));
-    await user.click(screen.getByRole("button", { name: "Adicionar resposta" }));
-    expect(screen.queryByRole("button", { name: "Adicionar resposta" })).not.toBeInTheDocument(); // máximo 4
-    await user.click(screen.getByRole("button", { name: "Remover resposta 4" }));
+    // Bloco de apoio da folha
+    await user.type(screen.getByLabelText("Texto de leitura (opcional)"), "A **matéria** ocupa espaço.");
+    await user.selectOptions(screen.getByLabelText("Figura da leitura"), "agua");
+    await user.type(screen.getByLabelText("Exemplo resolvido (opcional)"), "Ex.: a pedra é matéria.");
+
+    // Exercício 1: escolha
+    expect(screen.getByRole("group", { name: "Exercício 1" })).toHaveTextContent("Escolher a resposta certa");
+    await user.type(screen.getByLabelText("Enunciado"), "O que é matéria?");
+    await user.type(screen.getByLabelText("Texto da resposta 1"), "O que ocupa espaço");
+    await user.type(screen.getByLabelText("Texto da resposta 2"), "Só o ar");
+
+    // Exercício 2: marcar todas
+    await user.click(screen.getByRole("button", { name: "Marcar todas as certas" }));
+    const ex2 = within(screen.getByRole("group", { name: "Exercício 2" }));
+    await user.type(ex2.getByLabelText("Enunciado"), "Marque o que é matéria");
+    await user.type(ex2.getByLabelText("Texto da resposta 1"), "Pedra");
+    await user.type(ex2.getByLabelText("Texto da resposta 2"), "Saudade");
+    await user.type(ex2.getByLabelText("Texto da resposta 3"), "Água");
+    expect(ex2.getByRole("checkbox", { name: "Resposta 1: esta vale" })).toBeChecked();
+    await user.click(ex2.getByRole("checkbox", { name: "Resposta 3: esta vale" }));
+
+    // Exercício 3: verdadeiro ou falso
+    await user.click(screen.getByRole("button", { name: "Verdadeiro ou falso" }));
+    const ex3 = within(screen.getByRole("group", { name: "Exercício 3" }));
+    expect(ex3.getByLabelText("Enunciado")).toHaveValue("É verdadeiro ou falso?");
+    await user.type(ex3.getByLabelText("Texto da frase 1"), "O gelo é sólido.");
+    await user.type(ex3.getByLabelText("Texto da frase 2"), "O vapor é sólido.");
+    await user.click(within(ex3.getByRole("radiogroup", { name: "A frase 2 é" })).getByRole("radio", { name: "Falsa" }));
 
     await user.click(screen.getByRole("button", { name: "Salvar" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const body = JSON.parse(fetchMock.mock.calls[0]![1].body);
-    expect(body.module).toBe("LIVRE");
-    expect(body.content.items[0]).toMatchObject({
-      prompt: "Qual bicho late?",
-      support: "Na casa da Ana tem um bicho.",
-      supportIcon: "casa",
-      correctId: "o-cachorro",
-      options: [
-        { id: "o-gato", label: "Gato" },
-        { id: "o-cachorro", label: "Cachorro", icon: "cachorro" },
-        { id: "o-peixe", label: "Peixe" },
+    expect(body.module).toBe("FOLHA");
+    expect(body.content.support).toEqual({ text: "A **matéria** ocupa espaço.", icon: "agua", example: "Ex.: a pedra é matéria." });
+    expect(body.content.items.map((i: { type: string }) => i.type)).toEqual(["escolha", "marcar", "vf"]);
+    expect(body.content.items[0]).toMatchObject({ correctId: "o-o-que-ocupa-espaco" });
+    expect(body.content.items[1]).toMatchObject({ correctIds: ["o-pedra", "o-agua"] });
+    expect(body.content.items[2].statements).toEqual([
+      { id: "s1", text: "O gelo é sólido.", correct: true },
+      { id: "s2", text: "O vapor é sólido.", correct: false },
+    ]);
+  }, 20_000); // muita digitação simulada
+
+  it("Folha: pré-visualiza com a leitura em destaque, 'marcar todas' e uma frase do V/F por vez", async () => {
+    const user = userEvent.setup();
+    const marcar = {
+      ...emptyItem("FOLHA", "marcar"),
+      prompt: "Marque o que é matéria",
+      answers: [
+        { label: "Pedra", icon: "" as const },
+        { label: "Saudade", icon: "" as const },
+        { label: "Água", icon: "" as const },
       ],
+      correctSet: [0, 2],
+    };
+    setup("FOLHA", {
+      initial: {
+        title: "Matéria",
+        instruction: "Leia e responda",
+        difficulty: "INICIAL",
+        published: false,
+        items: [marcar],
+        sheet: { text: "A **matéria** ocupa espaço.", icon: "", example: "" },
+      },
     });
+    await user.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+    const preview = within(screen.getByRole("region", { name: "Pré-visualização" }));
+    expect(preview.getByRole("heading", { name: "Leia" })).toBeInTheDocument();
+    expect(preview.getByText("matéria", { selector: "strong" })).toBeInTheDocument();
+    expect(preview.getByText("Exercício 1 de 1")).toBeInTheDocument();
+    expect(preview.getByText("Marque todas as certas: 0 de 2.")).toBeInTheDocument();
+
+    await user.click(preview.getByRole("button", { name: /^Pedra, / }));
+    expect(preview.getByText(/Você achou: Pedra\. Falta 1\./)).toBeInTheDocument();
+    expect(preview.getByRole("button", { name: /^Pedra, / })).toHaveAttribute("aria-pressed", "true");
+    await user.click(preview.getByRole("button", { name: /^Água, / }));
+    expect(preview.getByText("Você achou todas!")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("Folha: resposta vazia e destaque aberto são apontados antes de salvar", async () => {
+    const user = userEvent.setup();
+    setup("FOLHA", {
+      initial: { title: "", instruction: "", difficulty: "INICIAL", published: false, items: [emptyItem("FOLHA")] },
+    });
+    await fillMeta(user);
+    await user.type(screen.getByLabelText("Texto de leitura (opcional)"), "A **matéria ocupa espaço.");
+    await user.type(screen.getByLabelText("Enunciado"), "O que é matéria?");
+    await user.type(screen.getByLabelText("Texto da resposta 1"), "Pedra");
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Exercício 1: escreva a resposta 2 (ou remova-a).");
+    expect(status).toHaveTextContent("Um destaque ficou aberto");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("Escrever o nome: só a configuração, sem marcadores nem itens; pré-visualiza com 'Sol' e salva", async () => {
@@ -254,16 +318,6 @@ describe("ActivityEditor — itens", () => {
     });
   });
 
-  it("Perguntas livres: resposta vazia é apontada antes de salvar", async () => {
-    const user = userEvent.setup();
-    setup("LIVRE");
-    await fillMeta(user);
-    await user.type(screen.getByLabelText("Pergunta"), "Qual bicho late?");
-    await user.type(screen.getByLabelText("Texto da resposta 1"), "Gato");
-    await user.click(screen.getByRole("button", { name: "Salvar" }));
-    expect(screen.getByRole("status")).toHaveTextContent("Item 1: escreva a resposta 2 (ou remova-a).");
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
 });
 
 describe("ActivityEditor — editar", () => {
@@ -376,7 +430,7 @@ describe("ActivityEditor — acessibilidade", () => {
     const c = setup("LOCALIZACAO", { activityId: "act1234567", sessionCount: 2, initial: { ...filled, items: [emptyItem("LOCALIZACAO")] } });
     expect(await axe(c.container)).toHaveNoViolations();
     c.unmount();
-    const d = setup("LIVRE", { initial: { ...filled, items: [emptyItem("LIVRE")] } });
+    const d = setup("FOLHA", { initial: { ...filled, items: [emptyItem("FOLHA"), emptyItem("FOLHA", "marcar"), emptyItem("FOLHA", "vf")] } });
     expect(await axe(d.container)).toHaveNoViolations();
     d.unmount();
     const e = setup("NOME", { initial: { ...filled, items: [emptyItem("NOME")] } });

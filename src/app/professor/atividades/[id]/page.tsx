@@ -35,6 +35,7 @@ export default async function EditarAtividadePage({ params }: { params: Promise<
           markerStyle: activity.markerStyle,
           published: activity.published,
           items: activity.items,
+          sheet: activity.sheet,
         }}
       />
       <Link href="/professor/atividades" className={cn(buttonVariants({ variant: "secundaria" }), "self-start")}>
