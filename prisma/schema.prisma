@@ -44,10 +44,12 @@ enum ActivityModule {
   GRAFIA
   MATEMATICA
   CIENCIAS
-  /// Perguntas livres: o professor escreve a pergunta, o apoio, as respostas e marca a certa.
+  /// Legado: as perguntas livres foram convertidas em FOLHA (migração 20261028120100). Não usar.
   LIVRE
   /// Escrever o próprio nome (apelido) com letras soltas. O conteúdo guarda só a configuração.
   NOME
+  /// Folha adaptada: bloco de apoio (texto, figura, exemplo) + exercícios de tipos diferentes.
+  FOLHA
 }
 
 /// Marcadores das respostas e das dicas (escolhido pelo professor em cada atividade).
