@@ -1,4 +1,4 @@
-import type { PlayItem } from "@/lib/validation/activities";
+import { isCorrectOption, type PlayItem } from "@/lib/validation/activities";
 
 export type HelpLevel = "NONE" | "VERBAL_HINT" | "VISUAL_HINT" | "FULL_MODEL";
 
@@ -19,8 +19,13 @@ export const REDIRECTS_BEFORE_MARKER_HINT = 2;
 export const REDIRECTS_BEFORE_HIGHLIGHT = 3;
 
 export interface ItemState {
-  /** answering = aguardando; correct = acertou; redirect = convite para tentar de novo. Não existe "erro". */
-  status: "answering" | "correct" | "redirect";
+  /**
+   * answering = aguardando; correct = acertou (todas, no "marcar todas"); partial = achou uma
+   * das certas e ainda faltam outras; redirect = convite para tentar de novo. Não existe "erro".
+   */
+  status: "answering" | "correct" | "partial" | "redirect";
+  /** Opções certas já encontradas (no "marcar todas" vão se somando; na escolha, só a certa). */
+  found: string[];
   /** Tentativas já feitas neste item. */
   attempts: number;
   redirects: number;
@@ -45,6 +50,7 @@ export interface AttemptRecord {
 export function initialItemState(now: number): ItemState {
   return {
     status: "answering",
+    found: [],
     attempts: 0,
     redirects: 0,
     help: "NONE",
@@ -58,7 +64,8 @@ export function initialItemState(now: number): ItemState {
 /**
  * Processa uma resposta. A ajuda registrada na tentativa é a que a criança JÁ tinha à vista;
  * a escalada causada por esta resposta vale só para a próxima tentativa.
- * Depois de acertar, novas respostas são ignoradas (attempt = null).
+ * Depois de acertar (ou ao tocar de novo numa certa já encontrada), nada é gravado (attempt = null).
+ * "Marcar todas": cada toque é conferido na hora; o passo termina quando todas as certas aparecem.
  */
 export function answer(
   item: PlayItem,
@@ -66,9 +73,9 @@ export function answer(
   state: ItemState,
   now: number,
 ): { state: ItemState; attempt: AttemptRecord | null } {
-  if (state.status === "correct") return { state, attempt: null };
+  if (state.status === "correct" || state.found.includes(optionId)) return { state, attempt: null };
 
-  const correct = optionId === item.correctId;
+  const correct = isCorrectOption(item, optionId);
   const attempt: AttemptRecord = {
     itemKey: item.key,
     optionId,
@@ -79,7 +86,9 @@ export function answer(
   };
 
   if (correct) {
-    return { state: { ...state, status: "correct", attempts: attempt.attemptNo }, attempt };
+    const found = [...state.found, optionId];
+    const done = found.length >= (item.correctIds?.length ?? 1);
+    return { state: { ...state, status: done ? "correct" : "partial", found, attempts: attempt.attemptNo }, attempt };
   }
 
   const redirects = state.redirects + 1;
@@ -99,9 +108,24 @@ export function answer(
   };
 }
 
-/** Criança pediu ajuda: sobe um degrau da escada (dica escrita → marcador → destaque). */
-export function requestHint(item: PlayItem, state: ItemState): ItemState {
-  if (state.status === "correct") return state;
+/** A certa que a dica aponta: a primeira ainda não encontrada (no "marcar todas", vai mudando). */
+export function hintedOptionIndex(item: PlayItem, state: ItemState): number {
+  return item.options.findIndex((o) => isCorrectOption(item, o.id) && !state.found.includes(o.id));
+}
+
+/** Quantas certas ainda faltam (1 na escolha comum). */
+export function remainingCorrect(item: PlayItem, state: ItemState): number {
+  return (item.correctIds?.length ?? 1) - state.found.length;
+}
+
+/**
+ * Criança pediu ajuda: sobe um degrau da escada (dica escrita → marcador → destaque).
+ * No "marcar todas", o pedido é o acontecimento mais recente: a dica aparece no lugar do
+ * "Isso! Falta 1." (status volta a "answering"; as já encontradas continuam marcadas).
+ */
+export function requestHint(item: PlayItem, current: ItemState): ItemState {
+  if (current.status === "correct") return current;
+  const state = current.status === "partial" ? { ...current, status: "answering" as const } : current;
   if (!state.hintShown && item.hint) {
     return { ...state, hintShown: true, help: maxHelp(state.help, "VERBAL_HINT") };
   }

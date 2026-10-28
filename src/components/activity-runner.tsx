@@ -11,7 +11,14 @@ import { Pictogram } from "@/components/pictogram";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Feedback } from "@/components/ui/feedback";
-import { answer, initialItemState, requestHint } from "@/lib/activities/runner";
+import { SheetSupportBlock } from "@/components/sheet-support";
+import {
+  answer,
+  hintedOptionIndex,
+  initialItemState,
+  remainingCorrect,
+  requestHint,
+} from "@/lib/activities/runner";
 import {
   DEFAULT_MARKER_STYLE,
   lookForText,
@@ -21,7 +28,7 @@ import {
   type MarkerStyle,
 } from "@/lib/activities/markers";
 import { canSpeak, speak } from "@/lib/speech";
-import type { PlayItem } from "@/lib/validation/activities";
+import type { PlayItem, SheetSupport } from "@/lib/validation/activities";
 import { cn } from "@/lib/utils";
 
 interface ActivityRunnerProps extends SessionCallbacks {
@@ -30,8 +37,17 @@ interface ActivityRunnerProps extends SessionCallbacks {
   items: PlayItem[];
   /** Escolha do professor. No tema Foco Alto vira só formas. */
   markerStyle?: MarkerStyle;
+  /** Folha: bloco de apoio mostrado acima de todos os exercícios. */
+  sheet?: SheetSupport;
   now?: () => number;
   backHref?: string;
+}
+
+/** "Exercício 2 de 3 · Frase 1 de 4" (folha) ou "Passo 2 de 5". */
+function progressLabel(item: PlayItem, index: number, total: number): string {
+  if (!item.exercise) return `Passo ${index + 1} de ${total}`;
+  const { part } = item.exercise;
+  return `Exercício ${item.exercise.index} de ${item.exercise.total}${part ? ` · Frase ${part.index} de ${part.total}` : ""}`;
 }
 
 function optionTextClass(stimulus: PlayItem["stimulus"]): string {
@@ -45,6 +61,7 @@ export function ActivityRunner({
   title,
   items,
   markerStyle = DEFAULT_MARKER_STYLE,
+  sheet,
   onStart,
   onRecord,
   onFinish,
@@ -103,9 +120,12 @@ export function ActivityRunner({
 
   // O marcador é da POSIÇÃO (as opções já chegam embaralhadas do servidor).
   const markers = item.options.map((_, i) => markerFor(i, style));
-  const correctIndex = item.options.findIndex((o) => o.id === item.correctId);
-  const correctOption = item.options[correctIndex];
-  const correctMarker = markers[correctIndex];
+  // A dica aponta a certa ainda não encontrada (no "marcar todas" ela muda a cada acerto).
+  const targetIndex = hintedOptionIndex(item, state);
+  const correctMarker = markers[targetIndex];
+  const lastFound = item.options.find((o) => o.id === state.found.at(-1));
+  const multi = Boolean(item.correctIds);
+  const remaining = remainingCorrect(item, state);
   const isLast = index === items.length - 1;
 
   // Degrau mais alto da escada de dicas que a criança já alcançou.
@@ -120,7 +140,11 @@ export function ActivityRunner({
 
   let feedback: { tone: "acerto" | "redirecionar"; title: string; text: string } | null = null;
   if (state.status === "correct") {
-    feedback = { tone: "acerto", title: "Isso!", text: `Você achou: ${correctOption?.label ?? ""}.` };
+    const text = multi ? "Você achou todas!" : `Você achou: ${lastFound?.label ?? ""}.`;
+    feedback = { tone: "acerto", title: "Isso!", text };
+  } else if (state.status === "partial") {
+    const text = `Você achou: ${lastFound?.label ?? ""}. Falta${remaining > 1 ? "m" : ""} ${remaining}.`;
+    feedback = { tone: "acerto", title: "Isso!", text };
   } else if (state.status === "redirect") {
     feedback = { tone: "redirecionar", title: "Quase!", text: hintText ?? "Vamos tentar de novo." };
   } else if (hintText) {
@@ -138,34 +162,42 @@ export function ActivityRunner({
           <h1 id="pergunta" tabIndex={-1} ref={heading}>
             {item.prompt}
           </h1>
-          <p className="text-subtitle text-ink-muted">
-            Passo {index + 1} de {items.length}
-          </p>
+          <p className="text-subtitle text-ink-muted">{progressLabel(item, index, items.length)}</p>
+          {multi ? (
+            <p className="text-label text-ink">
+              Marque todas as certas: {state.found.length} de {item.correctIds!.length}.
+            </p>
+          ) : null}
         </div>
         <Button
           variant="icone"
           icon={Volume2}
           aria-label="Ouvir de novo"
           disabled={!canListen}
-          onClick={() => speak(item.prompt)}
+          onClick={() =>
+            speak([item.prompt, item.stimulus.kind === "free" ? item.stimulus.text : ""].filter(Boolean).join(". "))
+          }
         />
       </header>
+
+      {sheet ? <SheetSupportBlock sheet={sheet} /> : null}
 
       <Card className="flex flex-col items-center gap-12">
         <ActivityStimulus stimulus={item.stimulus} />
         <div role="group" aria-label="Respostas" className="grid w-full grid-cols-2 gap-6">
           {item.options.map((option, i) => {
             const marker = markers[i]!;
-            const isCorrectChosen = state.status === "correct" && option.id === item.correctId;
-            const highlighted =
-              state.visualHint && state.status !== "correct" && option.id === item.correctId;
+            const isCorrectChosen = state.found.includes(option.id);
+            const highlighted = state.visualHint && state.status !== "correct" && i === targetIndex;
             return (
               <button
                 key={option.id}
                 type="button"
                 // Nome explícito (começa pelo texto visível, WCAG 2.5.3): "a, triângulo amarelo".
                 aria-label={`${option.label}, ${marker.name}${highlighted ? ". Dica: esta opção" : ""}`}
-                aria-disabled={state.status === "correct" && !isCorrectChosen ? true : undefined}
+                // Já encontrada (marcar todas) ou passo concluído: tocar de novo não faz nada.
+                aria-disabled={isCorrectChosen || state.status === "correct" ? true : undefined}
+                aria-pressed={multi ? isCorrectChosen : undefined}
                 onClick={() => choose(option.id)}
                 data-marker={marker.shape}
                 className={cn(

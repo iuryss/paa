@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Hash, Map, MessageCircleQuestion, PenLine, Type } from "lucide-react";
+import { ArrowLeft, Hash, Map, MessageCircleQuestion, NotebookPen, PenLine, Type } from "lucide-react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { buttonVariants } from "@/components/ui/button";
@@ -13,6 +13,7 @@ const MODULE_ICON = {
   MATEMATICA: <Hash aria-hidden="true" className="size-7" strokeWidth={2.5} />,
   CIENCIAS: null,
   LIVRE: <MessageCircleQuestion aria-hidden="true" className="size-7" strokeWidth={2.5} />,
+  FOLHA: <NotebookPen aria-hidden="true" className="size-7" strokeWidth={2.5} />,
   NOME: <PenLine aria-hidden="true" className="size-7" strokeWidth={2.5} />,
 } as const;
 

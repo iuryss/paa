@@ -337,10 +337,11 @@ describe("ActivityRunner — módulos", () => {
     expect(document.body.textContent).not.toContain("= ?");
   });
 
-  it("Perguntas livres: mostra o apoio (figura com nome e texto) e usa a resposta marcada pelo professor", async () => {
-    const items = parse("LIVRE", {
+  it("Folha (escolha): mostra o apoio (figura com nome e texto) e usa a resposta marcada pelo professor", async () => {
+    const items = parse("FOLHA", {
       items: [
         {
+          type: "escolha",
           key: "item-1",
           prompt: "Qual bicho late?",
           support: "Na casa da Ana tem um bicho que faz au-au.",
@@ -365,10 +366,11 @@ describe("ActivityRunner — módulos", () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
-  it("Perguntas livres sem apoio: nenhuma área vazia", () => {
-    const items = parse("LIVRE", {
+  it("Folha (escolha) sem apoio: nenhuma área vazia", () => {
+    const items = parse("FOLHA", {
       items: [
         {
+          type: "escolha",
           key: "item-1",
           prompt: "Qual é maior?",
           options: [
@@ -381,6 +383,57 @@ describe("ActivityRunner — módulos", () => {
     });
     setup(items);
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("Folha (verdadeiro ou falso): uma frase por vez, Verdadeiro antes de Falso, com a leitura da folha", async () => {
+    const r = parseActivityContent("FOLHA", {
+      support: { text: "O **gelo** é água sólida." },
+      items: [
+        {
+          type: "vf",
+          key: "item-1",
+          prompt: "É verdadeiro ou falso?",
+          statements: [
+            { id: "s1", text: "O gelo é sólido.", correct: true },
+            { id: "s2", text: "O vapor é sólido.", correct: false },
+          ],
+        },
+      ],
+    });
+    if (!r.success) throw new Error("inválido");
+    const onRecord = jest.fn().mockResolvedValue({ ok: true });
+    render(
+      <AccessibilityProvider initial={DEFAULT_PREFERENCES}>
+        <ActivityRunner
+          activityId="act-123456"
+          title="Estados"
+          items={r.items}
+          sheet={r.sheet}
+          onStart={jest.fn().mockResolvedValue({ ok: true, sessionId: "s" })}
+          onRecord={onRecord}
+          onFinish={jest.fn().mockResolvedValue({ ok: true })}
+        />
+      </AccessibilityProvider>,
+    );
+    expect(screen.getByRole("heading", { name: "Leia" })).toBeInTheDocument();
+    expect(screen.getByText("gelo", { selector: "strong" })).toBeInTheDocument();
+    expect(screen.getByText("Exercício 1 de 1 · Frase 1 de 2")).toBeInTheDocument();
+    expect(screen.getByText("O gelo é sólido.")).toBeInTheDocument();
+    const labels = screen.getAllByRole("button", { name: /, / }).map((b) => b.getAttribute("aria-label"));
+    expect(labels).toEqual(["Verdadeiro, círculo azul", "Falso, triângulo amarelo"]);
+
+    await userEvent.click(option("Verdadeiro"));
+    await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    expect(screen.getByText("Exercício 1 de 1 · Frase 2 de 2")).toBeInTheDocument();
+    await userEvent.click(option("Verdadeiro"));
+    expect(screen.getAllByRole("status")[0]).toHaveTextContent("Quase!");
+    await userEvent.click(option("Falso"));
+    await waitFor(() => expect(onRecord).toHaveBeenCalledTimes(3));
+    expect(onRecord.mock.calls.map((c) => [c[1].itemKey, c[1].optionId])).toEqual([
+      ["item-1-s1", "v"],
+      ["item-1-s2", "v"],
+      ["item-1-s2", "f"],
+    ]);
   });
 
   it("Modo pictográfico: opções com pictograma + palavra", () => {
