@@ -165,6 +165,12 @@ Imita a página do caderno adaptado: **leitura no topo, exercícios embaixo**.
 - **Marcar todas as certas**: a linha "Marque todas as certas: 1 de 2." fica embaixo da pergunta. Cada toque é conferido na hora: a certa fica com borda de acerto e `aria-pressed="true"`, e o feedback diz "Você achou: Pedra. Falta 1."; a que não vale é "Quase!" e não desmarca as já encontradas. A dica aponta a próxima certa ainda não marcada.
 - **Verdadeiro ou falso**: duas opções fixas, Verdadeiro sempre antes de Falso (nunca embaralhar), com os marcadores das posições 1 e 2.
 
+## Imagens do professor
+
+- Componente `UploadedImage`: `object-contain`, borda `border-subtle`, cantos 12px, nunca maior que o espaço (leitura até `max-h-72`, apoio `max-h-64`, resposta `max-h-24`). Carregamento preguiçoso; nada se mexe (imagens animadas são recusadas no envio).
+- Na resposta, a imagem fica **em cima** e o marcador + a palavra **embaixo**: a palavra nunca some (cor/figura nunca sozinhas).
+- Toda imagem tem texto alternativo escrito pelo professor; ele pode ajustar a descrição em cada atividade.
+
 ## Arrastar e soltar (Escrever o nome)
 
 Componente `NameRunner`. O mesmo padrão vale para os próximos arrastos (ex.: lugares no mapa).
