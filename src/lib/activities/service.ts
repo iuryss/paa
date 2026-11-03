@@ -1,5 +1,5 @@
 import type { ActivityModule, Difficulty, MarkerStyle, Prisma } from "@prisma/client";
-import { fromContent, type EditorItem } from "@/lib/activities/editor-model";
+import { fromContent, sheetFromContent, type EditorItem, type SheetDraft } from "@/lib/activities/editor-model";
 import { prisma } from "@/lib/db";
 import {
   contentSchemas,
@@ -136,6 +136,8 @@ export interface EditableActivity {
   markerStyle: MarkerStyle;
   published: boolean;
   items: EditorItem[];
+  /** Só na folha: o bloco de apoio (vazio nos outros módulos). */
+  sheet: SheetDraft;
   /** Com sessões gravadas, o conteúdo fica travado para não distorcer os gráficos. */
   sessionCount: number;
 }
@@ -173,6 +175,7 @@ export async function getActivityForEdit(
     markerStyle: row.markerStyle,
     published: row.published,
     items: fromContent(row.module, parsed.content),
+    sheet: sheetFromContent(parsed.content),
     sessionCount: row._count.sessions,
   };
 }

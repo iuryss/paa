@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { checkNameAttempt } from "@/lib/activities/name";
 import { maxHelp } from "@/lib/activities/runner";
-import { parseActivityContent } from "@/lib/validation/activities";
+import { isCorrectOption, parseActivityContent } from "@/lib/validation/activities";
 import type { AttemptInput } from "@/lib/validation/telemetry";
 
 export type TelemetryErrorCode = "not_found" | "closed" | "invalid_item";
@@ -81,7 +81,7 @@ export async function recordAttempt(
     if (!item || !item.options.some((o) => o.id === input.optionId)) {
       throw new TelemetryError("invalid_item");
     }
-    correct = input.optionId === item.correctId;
+    correct = isCorrectOption(item, input.optionId);
   }
 
   await prisma.$transaction([

@@ -63,7 +63,7 @@ for (const theme of THEMES) {
       await expect(page.getByRole("link", { name: "Letras" })).toBeVisible();
       await scan(page, "/aluno/atividades", findings);
 
-      for (const title of ["Letras", "Onde fica?", "Contas", "Bichos"]) {
+      for (const title of ["Letras", "Onde fica?", "Contas", "Bichos", "Matéria"]) {
         await openActivity(page, title);
         await expect(page.getByRole("group", { name: "Respostas" })).toBeVisible();
         await scan(page, `atividade "${title}"`, findings);
@@ -83,6 +83,18 @@ for (const theme of THEMES) {
       await option(page, "a").click();
       await expect(page.getByRole("status").filter({ hasText: "Isso!" })).toBeVisible();
       await scan(page, "Letras: acerto (Isso!)", findings);
+
+      // Folha: marcar todas com uma já marcada (parcial) e o V/F.
+      await openActivity(page, "Matéria");
+      await option(page, "O que ocupa espaço").click();
+      await page.getByRole("button", { name: "Continuar" }).click();
+      await option(page, "Pedra").click();
+      await expect(option(page, "Pedra")).toHaveAttribute("aria-pressed", "true");
+      await scan(page, "Matéria: marcar todas (parcial)", findings);
+      await option(page, "Água").click();
+      await page.getByRole("button", { name: "Continuar" }).click();
+      await expect(page.getByText(/Frase 1 de 2/)).toBeVisible();
+      await scan(page, "Matéria: verdadeiro ou falso", findings);
 
       // Escrever o nome: quadro inicial, dica com modelo, peça em destaque e uma letra colocada.
       await openActivity(page, "Meu nome");
@@ -123,7 +135,8 @@ for (const theme of THEMES) {
         ["/professor/atividades/nova?modulo=GRAFIA", "Nova atividade de Grafia"],
         ["/professor/atividades/nova?modulo=LOCALIZACAO", "Nova atividade de Localização"],
         ["/professor/atividades/nova?modulo=MATEMATICA", "Nova atividade de Matemática"],
-        ["/professor/atividades/nova?modulo=LIVRE", "Nova atividade de Perguntas livres"],
+        ["/professor/atividades/nova?modulo=FOLHA", "Nova atividade de Folha de exercícios"],
+        [`/professor/atividades/${seed.activities.materia}`, "Matéria"],
         ["/professor/atividades/nova?modulo=NOME", "Nova atividade de Escrever o nome"],
         [`/professor/atividades/${seed.activities.nome}`, "Meu nome"],
         [`/professor/atividades/${seed.activities.livre}`, "Bichos"],

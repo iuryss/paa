@@ -116,7 +116,7 @@ test("Matemática: a conta aparece com as maçãs", async ({ page }) => {
   await expect(page.getByRole("status").filter({ hasText: "Isso!" })).toBeVisible();
 });
 
-test("Perguntas livres: apoio com figura e texto, marcadores e a resposta marcada pelo professor", async ({ page }) => {
+test("Folha com um exercício (antiga pergunta livre): apoio com figura e texto, marcadores e a resposta marcada pelo professor", async ({ page }) => {
   await prisma.activitySession.deleteMany({});
   await loginStudent(page, STUDENT.code, STUDENT.pin);
   await openActivity(page, "Bichos");

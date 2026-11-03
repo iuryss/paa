@@ -156,6 +156,15 @@ Cada resposta leva um marcador à esquerda do rótulo, e as dicas apontam para e
 - **Cor nunca sozinha:** contorno `ink` de 3px em toda forma (3:1 sobre `surface`, `success-bg` e `drop-active-bg`), e o nome do marcador entra no nome acessível da opção ("a, triângulo amarelo") e no texto da dica. Tokens `marker-azul`, `marker-amarelo`, `marker-verde`, `marker-roxo`.
 - **Escada de dicas:** (1) dica escrita do professor, se houver → (2) "Procure o triângulo amarelo." com o marcador desenhado no feedback → (3) "Toque no triângulo amarelo, que está em destaque." com a opção em `drop-active-*`. O botão **Dica** sobe um degrau por toque; 2 redirecionamentos seguidos chegam ao degrau 2 e 3 redirecionamentos ao degrau 3.
 
+## Folha de exercícios
+
+Imita a página do caderno adaptado: **leitura no topo, exercícios embaixo**.
+
+- **Bloco "Leia"** (`SheetSupportBlock`): fica visível em todos os exercícios da folha, acima do cartão do exercício. Texto em `leitura` 22/34, no máximo `45ch`, alinhado à esquerda. `**palavra**` vira destaque `bg-accent text-on-accent` **e** `font-extrabold` (cor nunca sozinha). O exemplo resolvido fica numa caixa tracejada `surface-sunken` com o rótulo "Exemplo".
+- **Progresso** em palavras: "Exercício 2 de 3" e, no V/F, "· Frase 1 de 4". Um exercício por vez; no V/F, uma frase por vez.
+- **Marcar todas as certas**: a linha "Marque todas as certas: 1 de 2." fica embaixo da pergunta. Cada toque é conferido na hora: a certa fica com borda de acerto e `aria-pressed="true"`, e o feedback diz "Você achou: Pedra. Falta 1."; a que não vale é "Quase!" e não desmarca as já encontradas. A dica aponta a próxima certa ainda não marcada.
+- **Verdadeiro ou falso**: duas opções fixas, Verdadeiro sempre antes de Falso (nunca embaralhar), com os marcadores das posições 1 e 2.
+
 ## Arrastar e soltar (Escrever o nome)
 
 Componente `NameRunner`. O mesmo padrão vale para os próximos arrastos (ex.: lugares no mapa).

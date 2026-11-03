@@ -1,5 +1,5 @@
 import type { PlayItem } from "@/lib/validation/activities";
-import { answer, initialItemState, maxHelp, requestHint } from "./runner";
+import { answer, hintedOptionIndex, initialItemState, maxHelp, remainingCorrect, requestHint } from "./runner";
 
 const item: PlayItem = {
   key: "letra-a",
@@ -106,5 +106,62 @@ describe("requestHint", () => {
     const hinted = requestHint(item, initialItemState(0));
     const { attempt } = answer(item, "l-a", hinted, 10);
     expect(attempt?.helpLevel).toBe("VERBAL_HINT");
+  });
+});
+
+describe("marcar todas as certas", () => {
+  const multi: PlayItem = {
+    key: "naturais",
+    prompt: "Marque os números naturais",
+    options: [
+      { id: "o-2", label: "2" },
+      { id: "o-menos-3", label: "-3" },
+      { id: "o-0", label: "0" },
+      { id: "o-meio", label: "1/2" },
+    ],
+    correctId: "o-2",
+    correctIds: ["o-2", "o-0"],
+    stimulus: { kind: "free" },
+  };
+
+  it("cada certa encontrada soma; o passo só termina quando todas aparecem", () => {
+    let s = initialItemState(0);
+    const first = answer(multi, "o-0", s, 100);
+    expect(first.attempt).toMatchObject({ correct: true, attemptNo: 1 });
+    expect(first.state).toMatchObject({ status: "partial", found: ["o-0"] });
+    expect(remainingCorrect(multi, first.state)).toBe(1);
+    s = first.state;
+
+    const again = answer(multi, "o-0", s, 150);
+    expect(again.attempt).toBeNull(); // tocar de novo na mesma não conta
+
+    const last = answer(multi, "o-2", s, 200);
+    expect(last.state).toMatchObject({ status: "correct", found: ["o-0", "o-2"] });
+  });
+
+  it("uma que não vale é 'Quase!' e não apaga as já encontradas", () => {
+    const s = answer(multi, "o-0", initialItemState(0), 1).state;
+    const r = answer(multi, "o-meio", s, 2);
+    expect(r.attempt).toMatchObject({ correct: false });
+    expect(r.state).toMatchObject({ status: "redirect", found: ["o-0"] });
+  });
+
+  it("pedir dica depois de achar uma certa mostra a dica (e mantém as já encontradas)", () => {
+    const partial = answer({ ...multi, hint: "Natural não tem sinal de menos." }, "o-0", initialItemState(0), 1).state;
+    const hinted = requestHint({ ...multi, hint: "Natural não tem sinal de menos." }, partial);
+    expect(hinted).toMatchObject({ status: "answering", hintShown: true, found: ["o-0"] });
+  });
+
+  it("a dica aponta a próxima certa ainda não encontrada", () => {
+    let s = initialItemState(0);
+    expect(hintedOptionIndex(multi, s)).toBe(0); // o-2
+    s = answer(multi, "o-2", s, 1).state;
+    expect(hintedOptionIndex(multi, s)).toBe(2); // o-0
+  });
+
+  it("na escolha comum, tocar de novo na certa depois de acertar é ignorado", () => {
+    const done = answer(item, "l-a", initialItemState(0), 1).state;
+    expect(done.found).toEqual(["l-a"]);
+    expect(remainingCorrect(item, done)).toBe(0);
   });
 });

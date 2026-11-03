@@ -3,9 +3,15 @@ import { MAX_EXTRA_LETTERS, type LetterCase } from "@/lib/activities/name";
 import {
   DIRECTIONS,
   ICON_NAMES,
+  MAX_EXAMPLE_TEXT,
+  MAX_SHEET_EXERCISES,
+  MAX_SHEET_TEXT,
+  MAX_STATEMENTS,
   MAX_SUPPORT_TEXT,
   type Direction,
+  type ExerciseType,
   type IconName,
+  type SheetSupport,
   type SupportedModule,
 } from "@/lib/validation/activities";
 
@@ -14,23 +20,50 @@ export interface EditorAnswer {
   icon: IconName | "";
 }
 
+export interface EditorStatement {
+  text: string;
+  correct: boolean;
+}
+
+/** Bloco de apoio no topo da folha (vale para todos os exercícios). */
+export interface SheetDraft {
+  text: string;
+  icon: IconName | "";
+  example: string;
+}
+
+export const EMPTY_SHEET: SheetDraft = { text: "", icon: "", example: "" };
+
+export const EXERCISE_LABEL: Record<ExerciseType, string> = {
+  escolha: "Escolher a resposta certa",
+  marcar: "Marcar todas as certas",
+  vf: "Verdadeiro ou falso",
+};
+
 /**
  * Modelo do editor do professor: um formulário guiado (nunca JSON cru).
  * Localização, Grafia e Matemática: o professor digita o enunciado e as opções ERRADAS; a resposta
  * certa é derivada do estímulo (letra minúscula, soma, direção).
- * Perguntas livres: o professor escreve TODAS as respostas e marca a certa (sempre há uma marcada).
+ * Folha: o professor escreve TODAS as respostas e marca a(s) certa(s) (sempre há uma marcada).
  */
 export interface EditorItem {
   /** Escrever o nome: quantas letras extras, maiúsculas ou como cadastrado, e se o modelo aparece. */
   nameExtra: number;
   nameCase: LetterCase;
   nameModel: boolean;
-  /** Perguntas livres: texto e figura de apoio (opcionais). */
+  /** Folha: o tipo do exercício. */
+  exType: ExerciseType;
+  /** Folha: texto e figura de apoio do exercício (opcionais). */
   supportText: string;
   supportIcon: IconName | "";
-  /** Perguntas livres: de 2 a 4 respostas, e o índice da certa. */
+  /** Folha (escolha e marcar todas): de 2 a 4 respostas. */
   answers: EditorAnswer[];
+  /** Escolha: o índice da certa. */
   correctIndex: number;
+  /** Marcar todas: os índices das certas. */
+  correctSet: number[];
+  /** Verdadeiro ou falso: as frases. */
+  statements: EditorStatement[];
   prompt: string;
   hint: string;
   /** Grafia e Matemática: de 1 a 3 opções erradas. */
@@ -102,16 +135,20 @@ export const MAX_ANSWERS = MAX_MARKERS;
 export const MAX_ITEMS = 20;
 
 const emptyAnswer = (): EditorAnswer => ({ label: "", icon: "" });
+const emptyStatement = (): EditorStatement => ({ text: "", correct: true });
 
-export function emptyItem(module: SupportedModule): EditorItem {
+export function emptyItem(module: SupportedModule, exType: ExerciseType = "escolha"): EditorItem {
   const base: EditorItem = {
     nameExtra: 3,
     nameCase: "MAIUSCULAS",
     nameModel: true,
+    exType,
     supportText: "",
     supportIcon: "",
     answers: [],
     correctIndex: 0,
+    correctSet: [],
+    statements: [],
     prompt: "",
     hint: "",
     distractors: [],
@@ -124,17 +161,34 @@ export function emptyItem(module: SupportedModule): EditorItem {
   };
   if (module === "GRAFIA") return { ...base, distractors: ["", ""] };
   if (module === "MATEMATICA") return { ...base, distractors: ["", ""] };
-  if (module === "LIVRE") return { ...base, answers: [emptyAnswer(), emptyAnswer()] };
   if (module === "NOME") return { ...base, prompt: "Escreva seu nome" };
+  if (module === "FOLHA") {
+    if (exType === "vf") return { ...base, prompt: "É verdadeiro ou falso?", statements: [emptyStatement(), emptyStatement()] };
+    if (exType === "marcar") return { ...base, answers: [emptyAnswer(), emptyAnswer(), emptyAnswer()], correctSet: [0] };
+    return { ...base, answers: [emptyAnswer(), emptyAnswer()] };
+  }
   return base;
 }
 
-/** Remove uma resposta sem perder qual é a certa (se a certa sair, a 1ª passa a ser a certa). */
+/** Remove uma resposta sem perder qual é (ou quais são) a(s) certa(s). Se a certa sair, a 1ª passa a ser. */
 export function removeAnswer(item: EditorItem, index: number): EditorItem {
   const answers = item.answers.filter((_, i) => i !== index);
-  const correctIndex =
-    index === item.correctIndex ? 0 : index < item.correctIndex ? item.correctIndex - 1 : item.correctIndex;
-  return { ...item, answers, correctIndex };
+  const shift = (i: number) => (i > index ? i - 1 : i);
+  const correctIndex = index === item.correctIndex ? 0 : shift(item.correctIndex);
+  const kept = item.correctSet.filter((i) => i !== index).map(shift);
+  return { ...item, answers, correctIndex, correctSet: kept.length > 0 ? kept : [0] };
+}
+
+/** Marcar todas: liga/desliga uma resposta como certa (sempre fica pelo menos uma marcada). */
+export function toggleCorrect(item: EditorItem, index: number): EditorItem {
+  const has = item.correctSet.includes(index);
+  const next = has ? item.correctSet.filter((i) => i !== index) : [...item.correctSet, index].sort((a, b) => a - b);
+  return next.length === 0 ? item : { ...item, correctSet: next };
+}
+
+export function addStatement(item: EditorItem): EditorItem {
+  if (item.statements.length >= MAX_STATEMENTS) return item;
+  return { ...item, statements: [...item.statements, emptyStatement()] };
 }
 
 export function addAnswer(item: EditorItem): EditorItem {
@@ -180,9 +234,46 @@ function correctLabel(module: SupportedModule, item: EditorItem): string {
   return item.position;
 }
 
-/** Editor → JSON no formato validado por `contentSchemas`. */
-export function toContent(module: SupportedModule, items: EditorItem[]): { items: unknown[] } {
+function sheetToContent(sheet: SheetDraft): { support?: SheetSupport } {
+  const support: SheetSupport = {
+    ...(sheet.text.trim() ? { text: sheet.text.trim() } : {}),
+    ...(sheet.icon ? { icon: sheet.icon } : {}),
+    ...(sheet.example.trim() ? { example: sheet.example.trim() } : {}),
+  };
+  return Object.keys(support).length > 0 ? { support } : {};
+}
+
+/** Exercício da folha → JSON (ids estáveis a partir dos textos; a certa vem do que o professor marcou). */
+function exerciseToContent(item: EditorItem, common: Record<string, unknown>) {
+  const support = {
+    ...(item.supportText.trim() ? { support: item.supportText.trim() } : {}),
+    ...(item.supportIcon ? { supportIcon: item.supportIcon } : {}),
+  };
+  if (item.exType === "vf") {
+    return {
+      type: "vf",
+      ...common,
+      ...support,
+      statements: item.statements.map((s, j) => ({ id: `s${j + 1}`, text: s.text.trim(), correct: s.correct })),
+    };
+  }
+  const labels = item.answers.map((a) => a.label.trim());
+  const ids = uniqueIds("o", labels);
+  const options = item.answers.map((a, j) => ({ id: ids[j]!, label: labels[j]!, ...(a.icon ? { icon: a.icon } : {}) }));
+  if (item.exType === "marcar") {
+    return { type: "marcar", ...common, ...support, options, correctIds: item.correctSet.map((j) => ids[j] ?? "") };
+  }
+  return { type: "escolha", ...common, ...support, options, correctId: ids[item.correctIndex] ?? "" };
+}
+
+/** Editor → JSON no formato validado por `contentSchemas`. A folha também leva o bloco de apoio. */
+export function toContent(
+  module: SupportedModule,
+  items: EditorItem[],
+  sheet: SheetDraft = EMPTY_SHEET,
+): { items: unknown[]; support?: SheetSupport } {
   return {
+    ...(module === "FOLHA" ? sheetToContent(sheet) : {}),
     items: items.map((item, i) => {
       const key = `item-${i + 1}`;
       const common = { key, prompt: item.prompt.trim(), ...optionalHint(item.hint) };
@@ -208,17 +299,7 @@ export function toContent(module: SupportedModule, items: EditorItem[]): { items
           showModel: item.nameModel,
         };
       }
-      if (module === "LIVRE") {
-        const labels = item.answers.map((a) => a.label.trim());
-        const ids = uniqueIds("o", labels);
-        return {
-          ...common,
-          ...(item.supportText.trim() ? { support: item.supportText.trim() } : {}),
-          ...(item.supportIcon ? { supportIcon: item.supportIcon } : {}),
-          options: item.answers.map((a, j) => ({ id: ids[j]!, label: labels[j]!, ...(a.icon ? { icon: a.icon } : {}) })),
-          correctId: ids[item.correctIndex] ?? "",
-        };
-      }
+      if (module === "FOLHA") return exerciseToContent(item, common);
       if (module === "GRAFIA") {
         return {
           ...common,
@@ -239,9 +320,13 @@ export function toContent(module: SupportedModule, items: EditorItem[]): { items
 interface StoredItem {
   prompt: string;
   hint?: string;
-  /** Ausentes no módulo NOME (só configuração). */
+  /** Folha: o tipo do exercício. */
+  type?: ExerciseType;
+  /** Ausentes no módulo NOME (só configuração) e no V/F. */
   options?: { id: string; label: string; icon?: IconName }[];
   correctId?: string;
+  correctIds?: string[];
+  statements?: { id: string; text: string; correct: boolean }[];
   extraLetters?: number;
   letterCase?: LetterCase;
   showModel?: boolean;
@@ -259,8 +344,9 @@ export function fromContent(module: SupportedModule, content: unknown): EditorIt
   const items = ((content as { items?: StoredItem[] } | null)?.items ?? []) as StoredItem[];
   return items.map((s) => {
     const options = s.options ?? [];
+    const isSheet = module === "FOLHA";
     return {
-      ...emptyItem(module),
+      ...emptyItem(module, s.type),
       prompt: s.prompt,
       hint: s.hint ?? "",
       distractors:
@@ -272,8 +358,10 @@ export function fromContent(module: SupportedModule, content: unknown): EditorIt
       nameModel: s.showModel ?? true,
       supportText: s.support ?? "",
       supportIcon: s.supportIcon ?? "",
-      answers: module === "LIVRE" ? options.map((o) => ({ label: o.label, icon: o.icon ?? "" })) : [],
-      correctIndex: module === "LIVRE" ? Math.max(0, options.findIndex((o) => o.id === s.correctId)) : 0,
+      answers: isSheet ? options.map((o) => ({ label: o.label, icon: o.icon ?? "" })) : [],
+      correctIndex: isSheet ? Math.max(0, options.findIndex((o) => o.id === s.correctId)) : 0,
+      correctSet: (s.correctIds ?? []).map((id) => options.findIndex((o) => o.id === id)).filter((j) => j >= 0),
+      statements: (s.statements ?? []).map((st) => ({ text: st.text, correct: st.correct })),
       display: s.display ?? "",
       a: s.a ?? 1,
       b: s.b ?? 1,
@@ -302,9 +390,12 @@ export function validateItems(module: SupportedModule, items: EditorItem[]): str
   }
   if (items.length === 0) errors.push("Adicione pelo menos 1 item.");
   if (items.length > MAX_ITEMS) errors.push(`Use no máximo ${MAX_ITEMS} itens.`);
+  if (module === "FOLHA" && items.length > MAX_SHEET_EXERCISES) {
+    errors.push(`Uma folha tem no máximo ${MAX_SHEET_EXERCISES} exercícios.`);
+  }
 
   items.forEach((item, i) => {
-    const n = `Item ${i + 1}`;
+    const n = `${module === "FOLHA" ? "Exercício" : "Item"} ${i + 1}`;
     if (!item.prompt.trim()) errors.push(`${n}: escreva a pergunta.`);
 
     if (module === "LOCALIZACAO") {
@@ -312,9 +403,24 @@ export function validateItems(module: SupportedModule, items: EditorItem[]): str
       return;
     }
 
-    if (module === "LIVRE") {
+    if (module === "FOLHA") {
       if (item.supportText.trim().length > MAX_SUPPORT_TEXT) {
         errors.push(`${n}: o texto de apoio pode ter até ${MAX_SUPPORT_TEXT} letras.`);
+      }
+      if (item.exType === "vf") {
+        if (item.statements.length < 1 || item.statements.length > MAX_STATEMENTS) {
+          errors.push(`${n}: use de 1 a ${MAX_STATEMENTS} frases.`);
+        }
+        item.statements.forEach((s, j) => {
+          if (!s.text.trim()) errors.push(`${n}: escreva a frase ${j + 1} (ou remova-a).`);
+        });
+        return;
+      }
+      if (item.exType === "marcar") {
+        if (item.correctSet.length < 1) errors.push(`${n}: marque pelo menos uma resposta certa.`);
+        if (item.correctSet.length >= item.answers.length) {
+          errors.push(`${n}: deixe pelo menos uma resposta que não vale (senão não há o que escolher).`);
+        }
       }
       const labels = item.answers.map((a) => a.label.trim());
       if (labels.length < MIN_ANSWERS || labels.length > MAX_ANSWERS) {
@@ -325,7 +431,7 @@ export function validateItems(module: SupportedModule, items: EditorItem[]): str
       });
       const filled = labels.filter(Boolean).map((l) => l.toLocaleLowerCase("pt-BR"));
       if (new Set(filled).size !== filled.length) errors.push(`${n}: há respostas repetidas.`);
-      if (item.correctIndex < 0 || item.correctIndex >= labels.length) {
+      if (item.exType === "escolha" && (item.correctIndex < 0 || item.correctIndex >= labels.length)) {
         errors.push(`${n}: marque qual é a resposta certa.`);
       }
       return;
@@ -350,6 +456,21 @@ export function validateItems(module: SupportedModule, items: EditorItem[]): str
       errors.push(`${n}: há opções erradas repetidas.`);
     }
   });
+  return errors;
+}
+
+/** JSON já validado da folha → bloco de apoio no editor. */
+export function sheetFromContent(content: unknown): SheetDraft {
+  const support = (content as { support?: SheetSupport } | null)?.support;
+  return { text: support?.text ?? "", icon: support?.icon ?? "", example: support?.example ?? "" };
+}
+
+export function validateSheet(sheet: SheetDraft): string[] {
+  const errors: string[] = [];
+  if (sheet.text.trim().length > MAX_SHEET_TEXT) errors.push(`O texto de leitura pode ter até ${MAX_SHEET_TEXT} letras.`);
+  if (sheet.example.trim().length > MAX_EXAMPLE_TEXT) errors.push(`O exemplo pode ter até ${MAX_EXAMPLE_TEXT} letras.`);
+  const marks = sheet.text.split("**").length - 1;
+  if (marks % 2 !== 0) errors.push("Um destaque ficou aberto: use **palavra** (dois asteriscos antes e depois).");
   return errors;
 }
 

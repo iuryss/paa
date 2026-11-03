@@ -85,49 +85,64 @@ describe("parseActivityContent", () => {
     expect(parseActivityContent("GRAFIA", extra).success).toBe(false);
   });
 
-  describe("Perguntas livres", () => {
-    const livre = {
+  describe("Folha", () => {
+    const folha = {
+      support: { text: "Na casa da **Ana** tem um bicho.", icon: "casa" },
       items: [
         {
+          type: "escolha",
           key: "item-1",
           prompt: "Qual bicho late?",
-          support: "<i>Na casa</i> da Ana tem um bicho.",
-          supportIcon: "casa",
+          support: "<i>Ele</i> late.",
           options: [
             { id: "o-gato", label: "Gato", icon: "gato" },
             { id: "o-cachorro", label: "Cachorro", icon: "cachorro" },
           ],
           correctId: "o-cachorro",
         },
+        {
+          type: "marcar",
+          key: "item-2",
+          prompt: "Marque os que voam",
+          options: [
+            { id: "o-passaro", label: "Pássaro" },
+            { id: "o-peixe", label: "Peixe" },
+            { id: "o-borboleta", label: "Borboleta" },
+          ],
+          correctIds: ["o-passaro", "o-borboleta"],
+        },
+        { type: "vf", key: "item-3", prompt: "Verdadeiro ou falso?", statements: [{ id: "s1", text: "O peixe nada.", correct: true }] },
       ],
     };
+    type Folha = Record<string, unknown> & { support: Record<string, unknown>; items: Record<string, unknown>[] };
+    const changed = (mutate: (c: Folha) => void) => {
+      const c = clone(folha) as unknown as Folha;
+      mutate(c);
+      return parseActivityContent("FOLHA", c).success;
+    };
 
-    it("aceita apoio e sanitiza o texto; a certa é a escolhida pelo professor", () => {
-      const r = parseActivityContent("LIVRE", livre);
-      expect(r.success && r.items[0]).toMatchObject({
-        correctId: "o-cachorro",
-        stimulus: { kind: "free", text: "Na casa da Ana tem um bicho.", icon: "casa" },
-      });
+    it("aceita os 3 tipos, sanitiza e devolve o apoio da folha", () => {
+      const r = parseActivityContent("FOLHA", folha);
+      if (!r.success) throw new Error("inválido");
+      expect(r.sheet).toEqual({ text: "Na casa da **Ana** tem um bicho.", icon: "casa" });
+      expect(r.items[0]?.stimulus).toEqual({ kind: "free", text: "Ele late." });
+      expect(r.items.map((i) => i.key)).toEqual(["item-1", "item-2", "item-3-s1"]);
     });
 
-    it("recusa apoio longo, figura fora da lista e respostas com o mesmo texto", () => {
-      const long = clone(livre);
-      long.items[0]!.support = "x".repeat(301);
-      expect(parseActivityContent("LIVRE", long).success).toBe(false);
-
-      const url = clone(livre) as unknown as { items: Record<string, unknown>[] };
-      url.items[0]!.supportIcon = "https://exemplo.test/foto.png";
-      expect(parseActivityContent("LIVRE", url).success).toBe(false);
-
-      const twin = clone(livre);
-      twin.items[0]!.options[1]!.label = "gato";
-      expect(parseActivityContent("LIVRE", twin).success).toBe(false);
+    it("recusa: certa fora das opções, marcar com tudo certo, tipo desconhecido, texto longo, figura fora da lista", () => {
+      expect(changed((c) => (c.items[0]!.correctId = "o-lobo"))).toBe(false);
+      expect(changed((c) => (c.items[1]!.correctIds = ["o-passaro", "o-peixe", "o-borboleta"]))).toBe(false);
+      expect(changed((c) => (c.items[2]!.type = "desenho"))).toBe(false);
+      expect(changed((c) => (c.support.text = "x".repeat(801)))).toBe(false);
+      expect(changed((c) => (c.support.icon = "https://exemplo.test/foto.png"))).toBe(false);
     });
 
-    it("recusa campos de outros módulos (ex.: display)", () => {
-      const extra = clone(livre) as unknown as { items: Record<string, unknown>[] };
-      extra.items[0]!.display = "A";
-      expect(parseActivityContent("LIVRE", extra).success).toBe(false);
+    it("recusa chaves repetidas, inclusive as que nascem das frases do V/F", () => {
+      expect(changed((c) => (c.items[0]!.key = "item-3-s1"))).toBe(false);
+    });
+
+    it("o formato antigo das perguntas livres (LIVRE) não é mais aceito", () => {
+      expect(parseActivityContent("LIVRE", { items: [folha.items[0]] }).success).toBe(false);
     });
   });
 

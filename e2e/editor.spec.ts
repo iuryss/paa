@@ -127,38 +127,60 @@ test("outro professor não edita a atividade alheia, mas duplica a publicada", a
   expect((await prisma.activity.findUnique({ where: { id: seed.activities.grafia } }))?.title).toBe("Letras");
 });
 
-test("professor cria uma pergunta livre, marca a resposta certa e o aluno joga", async ({ page, browser }) => {
+test("professor monta uma folha com leitura e os 3 tipos de exercício, e o aluno joga", async ({ page, browser }) => {
   await loginAdult(page, TEACHER.email, TEACHER.password);
   await page.goto("/professor/atividades/nova");
-  await page.getByRole("link", { name: /Perguntas livres/ }).click();
-  await expect(page).toHaveURL(/modulo=LIVRE/);
-  await expect(page.getByRole("heading", { level: 1, name: "Nova atividade de Perguntas livres" })).toBeVisible();
+  await page.getByRole("link", { name: /Folha de exercícios/ }).click();
+  await expect(page).toHaveURL(/modulo=FOLHA/);
+  await expect(page.getByRole("heading", { level: 1, name: "Nova atividade de Folha de exercícios" })).toBeVisible();
 
   await page.getByLabel("Título").fill("O tempo");
-  await page.getByLabel("Instrução curta").fill("Leia e escolha");
-  await page.getByLabel("Pergunta", { exact: true }).fill("O que aparece de dia?");
-  await page.getByLabel("Texto de apoio (opcional)").fill("De manhã o céu fica claro e quentinho.");
-  await page.getByLabel("Figura de apoio").selectOption({ label: "Nuvem" });
-  await page.getByLabel("Texto da resposta 1").fill("Lua");
-  await page.getByLabel("Texto da resposta 2").fill("Sol");
-  await page.getByLabel("Figura da resposta 2").selectOption({ label: "Sol" });
-  await page.getByRole("radio", { name: "Resposta 2: esta é a certa" }).check();
+  await page.getByLabel("Instrução curta").fill("Leia e responda");
+  await page.getByLabel("Texto de leitura (opcional)").fill("De dia o **sol** brilha. À noite aparece a **lua**.");
+  await page.getByLabel("Figura da leitura").selectOption({ label: "Sol" });
+
+  // Exercício 1: escolha (já vem na folha nova)
+  const ex1 = page.getByRole("group", { name: "Exercício 1" });
+  await ex1.getByLabel("Enunciado").fill("O que aparece de dia?");
+  await ex1.getByLabel("Texto da resposta 1").fill("Lua");
+  await ex1.getByLabel("Texto da resposta 2").fill("Sol");
+  await ex1.getByRole("radio", { name: "Resposta 2: esta é a certa" }).check();
+
+  // Exercício 2: marcar todas
+  await page.getByRole("group", { name: "Adicionar exercício" }).getByRole("button", { name: "Marcar todas as certas" }).click();
+  const ex2 = page.getByRole("group", { name: "Exercício 2" });
+  await ex2.getByLabel("Enunciado").fill("Marque o que aparece no céu");
+  await ex2.getByLabel("Texto da resposta 1").fill("Sol");
+  await ex2.getByLabel("Texto da resposta 2").fill("Carro");
+  await ex2.getByLabel("Texto da resposta 3").fill("Nuvem");
+  await ex2.getByRole("checkbox", { name: "Resposta 3: esta vale" }).check();
+
+  // Exercício 3: verdadeiro ou falso
+  await page.getByRole("group", { name: "Adicionar exercício" }).getByRole("button", { name: "Verdadeiro ou falso" }).click();
+  const ex3 = page.getByRole("group", { name: "Exercício 3" });
+  await ex3.getByLabel("Texto da frase 1").fill("A lua aparece à noite.");
+  await ex3.getByLabel("Texto da frase 2").fill("O sol aparece à noite.");
+  await ex3.getByRole("radiogroup", { name: "A frase 2 é" }).getByRole("radio", { name: "Falsa" }).check();
+
   await page.getByLabel(/Publicada/).check();
   await page.getByRole("button", { name: "Salvar" }).click();
   await expect(page).toHaveURL(/\/professor\/atividades\/[A-Za-z0-9]+$/);
 
   const saved = await prisma.activity.findFirst({ where: { title: "O tempo" } });
-  expect(saved).toMatchObject({ module: "LIVRE", published: true });
-  const item = (saved!.content as { items: Record<string, unknown>[] }).items[0]!;
-  expect(item).toMatchObject({ support: "De manhã o céu fica claro e quentinho.", supportIcon: "nuvem", correctId: "o-sol" });
+  expect(saved).toMatchObject({ module: "FOLHA", published: true });
+  const content = saved!.content as { support: unknown; items: Record<string, unknown>[] };
+  expect(content.support).toEqual({ text: "De dia o **sol** brilha. À noite aparece a **lua**.", icon: "sol" });
+  expect(content.items.map((i) => i.type)).toEqual(["escolha", "marcar", "vf"]);
+  expect(content.items[1]).toMatchObject({ correctIds: ["o-sol", "o-nuvem"] });
 
-  // Reabrindo, o formulário volta com a certa marcada.
+  // Reabrindo, o formulário volta igual.
   await page.reload();
-  await expect(page.getByRole("radio", { name: "Resposta 2: esta é a certa" })).toBeChecked();
-  await expect(page.getByLabel("Texto da resposta 1")).toHaveValue("Lua");
+  await expect(page.getByRole("group", { name: "Exercício 1" }).getByRole("radio", { name: "Resposta 2: esta é a certa" })).toBeChecked();
+  await expect(page.getByRole("group", { name: "Exercício 2" }).getByRole("checkbox", { name: "Resposta 3: esta vale" })).toBeChecked();
+  await expect(page.getByLabel("Texto de leitura (opcional)")).toHaveValue("De dia o **sol** brilha. À noite aparece a **lua**.");
 
   await page.goto(`/professor/alunos/${seed.studentId}`);
-  await page.getByLabel("Atividade", { exact: true }).selectOption({ label: "O tempo (Perguntas livres)" });
+  await page.getByLabel("Atividade", { exact: true }).selectOption({ label: "O tempo (Folha de exercícios)" });
   await page.getByRole("button", { name: "Atribuir" }).click();
   await expect(page.getByText("Atividade atribuída.")).toBeVisible();
 
@@ -167,7 +189,8 @@ test("professor cria uma pergunta livre, marca a resposta certa e o aluno joga",
   await loginStudent(kid, STUDENT.code, STUDENT.pin);
   await kid.goto("/aluno/atividades");
   await kid.getByRole("link", { name: "O tempo" }).click();
-  await expect(kid.getByText("De manhã o céu fica claro e quentinho.")).toBeVisible();
+  await expect(kid.getByRole("heading", { name: "Leia" })).toBeVisible();
+  await expect(kid.getByText("sol", { exact: true })).toBeVisible(); // a palavra em destaque
   await option(kid, "Sol").click();
   await expect(kid.getByRole("status").filter({ hasText: "Isso!" })).toBeVisible();
   await child.close();

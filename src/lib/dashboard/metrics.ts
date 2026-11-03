@@ -157,6 +157,7 @@ export const MODULE_LABEL: Record<string, string> = {
   MATEMATICA: "Matemática",
   CIENCIAS: "Ciências",
   LIVRE: "Perguntas livres",
+  FOLHA: "Folha de exercícios",
   NOME: "Escrever o nome",
 };
 

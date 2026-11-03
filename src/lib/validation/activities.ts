@@ -3,7 +3,8 @@ import { DEFAULT_MARKER_STYLE, MARKER_STYLES } from "@/lib/activities/markers";
 import { LETTER_CASES, MAX_EXTRA_LETTERS, type NameConfig } from "@/lib/activities/name";
 import { sanitizeText } from "@/lib/sanitize";
 
-export const SUPPORTED_MODULES = ["LOCALIZACAO", "GRAFIA", "MATEMATICA", "LIVRE", "NOME"] as const;
+/** LIVRE (perguntas livres) virou FOLHA: a migração 20261028120100 converte as atividades antigas. */
+export const SUPPORTED_MODULES = ["LOCALIZACAO", "GRAFIA", "MATEMATICA", "FOLHA", "NOME"] as const;
 export type SupportedModule = (typeof SUPPORTED_MODULES)[number];
 
 export const DIRECTIONS = ["norte", "sul", "leste", "oeste"] as const;
@@ -71,7 +72,18 @@ export interface PlayItem {
   hint?: string;
   options: PlayOption[];
   correctId: string;
+  /** Marcar todas: TODAS as certas (correctId é a primeira delas). */
+  correctIds?: string[];
+  /** Ordem fixa, sem embaralhar (ex.: Verdadeiro/Falso). */
+  fixedOrder?: boolean;
+  /** Folha: em qual exercício a criança está (e em qual frase, no V/F). */
+  exercise?: { index: number; total: number; part?: { index: number; total: number } };
   stimulus: Stimulus;
+}
+
+/** A regra de "certo" de um passo, a mesma no navegador e no servidor. */
+export function isCorrectOption(item: PlayItem, optionId: string): boolean {
+  return item.correctIds ? item.correctIds.includes(optionId) : optionId === item.correctId;
 }
 
 // ───────────── Schemas de conteúdo (validação + sanitização) ─────────────
@@ -118,19 +130,150 @@ const matematicaItem = z
 /** Até 300 caracteres de apoio: ~6 linhas de 45 caracteres, o limite de leitura do design system. */
 export const MAX_SUPPORT_TEXT = 300;
 
-const livreItem = z
-  .object({
-    ...itemShape(slug),
-    support: text(MAX_SUPPORT_TEXT).optional(),
-    supportIcon: icon.optional(),
-  })
-  .strict()
-  .superRefine((item, ctx) => {
+// ───────────── Folha (atividade adaptada): apoio + exercícios de tipos diferentes ─────────────
+
+/** O texto da folha é maior que o apoio de um exercício: é a "leitura" da página do caderno. */
+export const MAX_SHEET_TEXT = 800;
+export const MAX_EXAMPLE_TEXT = 300;
+export const MAX_SHEET_EXERCISES = 12;
+export const MAX_STATEMENTS = 6;
+export const EXERCISE_TYPES = ["escolha", "marcar", "vf"] as const;
+export type ExerciseType = (typeof EXERCISE_TYPES)[number];
+
+/** Bloco de apoio no topo da folha. `**palavra**` no texto vira destaque. */
+export interface SheetSupport {
+  text?: string;
+  icon?: IconName;
+  example?: string;
+}
+
+const sheetOption = z.object({ id: slug, label: text(40), icon: icon.optional() }).strict();
+const exerciseBase = {
+  key: slug,
+  prompt: text(120),
+  hint: text(120).optional(),
+  support: text(MAX_SUPPORT_TEXT).optional(),
+  supportIcon: icon.optional(),
+};
+
+const sheetExercise = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("escolha"), ...exerciseBase, options: z.array(sheetOption).min(2).max(4), correctId: slug }).strict(),
+  /** Marcar todas as certas (no papel: "pinte as respostas certas"). */
+  z
+    .object({
+      type: z.literal("marcar"),
+      ...exerciseBase,
+      options: z.array(sheetOption).min(2).max(4),
+      correctIds: z.array(slug).min(1).max(4),
+    })
+    .strict(),
+  /** Verdadeiro ou falso: uma frase por vez. */
+  z
+    .object({
+      type: z.literal("vf"),
+      ...exerciseBase,
+      statements: z
+        .array(z.object({ id: slug, text: text(200), correct: z.boolean() }).strict())
+        .min(1)
+        .max(MAX_STATEMENTS),
+    })
+    .strict(),
+]);
+type SheetExercise = z.infer<typeof sheetExercise>;
+
+/** Chave de telemetria de cada frase do V/F: "item-2-s1". */
+export const statementKey = (exerciseKey: string, statementId: string) => `${exerciseKey}-${statementId}`;
+
+function checkSheet({ items }: { items: SheetExercise[] }, ctx: z.RefinementCtx): void {
+  const keys = new Set<string>();
+  const addKey = (key: string, i: number) => {
+    if (keys.has(key)) ctx.addIssue({ code: "custom", path: ["items", i, "key"], message: "Chave repetida." });
+    keys.add(key);
+  };
+  items.forEach((item, i) => {
+    addKey(item.key, i);
+    if (item.type === "vf") {
+      const ids = item.statements.map((s) => s.id);
+      if (new Set(ids).size !== ids.length) {
+        ctx.addIssue({ code: "custom", path: ["items", i, "statements"], message: "Frases repetidas." });
+      }
+      ids.forEach((id) => addKey(statementKey(item.key, id), i));
+      return;
+    }
+    const ids = item.options.map((o) => o.id);
     const labels = item.options.map((o) => o.label.toLocaleLowerCase("pt-BR"));
-    if (new Set(labels).size !== labels.length) {
-      ctx.addIssue({ code: "custom", path: ["options"], message: "Respostas com o mesmo texto." });
+    if (new Set(ids).size !== ids.length || new Set(labels).size !== labels.length) {
+      ctx.addIssue({ code: "custom", path: ["items", i, "options"], message: "Respostas repetidas." });
+    }
+    const correct = item.type === "escolha" ? [item.correctId] : item.correctIds;
+    if (!correct.every((id) => ids.includes(id)) || new Set(correct).size !== correct.length) {
+      ctx.addIssue({ code: "custom", path: ["items", i], message: "A resposta certa precisa estar entre as opções." });
+    }
+    // Marcar todas com tudo certo não pede nenhuma escolha: precisa sobrar ao menos uma diferente.
+    if (item.type === "marcar" && correct.length >= ids.length) {
+      ctx.addIssue({ code: "custom", path: ["items", i, "correctIds"], message: "Deixe pelo menos uma resposta que não vale." });
     }
   });
+}
+
+const sheetContent = z
+  .object({
+    support: z
+      .object({ text: text(MAX_SHEET_TEXT).optional(), icon: icon.optional(), example: text(MAX_EXAMPLE_TEXT).optional() })
+      .strict()
+      .optional(),
+    items: z.array(sheetExercise).min(1).max(MAX_SHEET_EXERCISES),
+  })
+  .strict()
+  .superRefine(checkSheet);
+
+const freeStimulus = (support?: string, supportIcon?: IconName): Stimulus => ({
+  kind: "free",
+  ...(support ? { text: support } : {}),
+  ...(supportIcon ? { icon: supportIcon } : {}),
+});
+
+const playOption = (o: { id: string; label: string; icon?: IconName }): PlayOption => ({
+  id: o.id,
+  label: o.label,
+  ...(o.icon ? { icon: o.icon } : {}),
+});
+
+export const TRUE_FALSE_OPTIONS: PlayOption[] = [
+  { id: "v", label: "Verdadeiro" },
+  { id: "f", label: "Falso" },
+];
+
+/** A folha vira uma lista de passos que a tela já sabe jogar (o V/F vira um passo por frase). */
+function sheetPlayItems(items: SheetExercise[]): PlayItem[] {
+  const total = items.length;
+  return items.flatMap((ex, i): PlayItem[] => {
+    const base = { prompt: ex.prompt, ...(ex.hint ? { hint: ex.hint } : {}) };
+    const exercise = { index: i + 1, total };
+    if (ex.type === "vf") {
+      return ex.statements.map((s, j) => ({
+        ...base,
+        key: statementKey(ex.key, s.id),
+        options: TRUE_FALSE_OPTIONS,
+        correctId: s.correct ? "v" : "f",
+        fixedOrder: true,
+        stimulus: freeStimulus(s.text, j === 0 ? ex.supportIcon : undefined),
+        exercise: { ...exercise, part: { index: j + 1, total: ex.statements.length } },
+      }));
+    }
+    return [
+      {
+        ...base,
+        key: ex.key,
+        options: ex.options.map(playOption),
+        correctId: ex.type === "escolha" ? ex.correctId : ex.correctIds[0]!,
+        ...(ex.type === "marcar" ? { correctIds: ex.correctIds } : {}),
+        stimulus: freeStimulus(ex.support, ex.supportIcon),
+        exercise,
+      },
+    ];
+  });
+}
 
 interface ItemLike {
   key: string;
@@ -169,7 +312,7 @@ export const contentSchemas = {
   LOCALIZACAO: content(localizacaoItem),
   GRAFIA: content(grafiaItem),
   MATEMATICA: content(matematicaItem),
-  LIVRE: content(livreItem),
+  FOLHA: sheetContent,
   // Uma configuração só: o nome (e portanto as letras) vem de cada aluno na hora de jogar.
   NOME: z
     .object({
@@ -213,17 +356,16 @@ function stimulusFor(module: SupportedModule, item: RawItem): Stimulus {
   if (module === "GRAFIA") {
     return { kind: "letter", display: (item as unknown as { display: string }).display };
   }
-  if (module === "LIVRE") {
-    const { support, supportIcon } = item as { support?: string; supportIcon?: IconName };
-    return { kind: "free", ...(support ? { text: support } : {}), ...(supportIcon ? { icon: supportIcon } : {}) };
-  }
   const { a, b } = item as unknown as { a: number; b: number };
   return { kind: "count", a, b };
 }
 
 export type ParsedContent =
-  /** `name` só no módulo NOME (que não tem itens de escolha: o quadro é montado por aluno). */
-  | { success: true; content: unknown; items: PlayItem[]; name?: NameConfig }
+  /**
+   * `name` só no módulo NOME (que não tem itens de escolha: o quadro é montado por aluno).
+   * `sheet` só na FOLHA: o bloco de apoio mostrado acima de todos os exercícios.
+   */
+  | { success: true; content: unknown; items: PlayItem[]; name?: NameConfig; sheet?: SheetSupport }
   | { success: false };
 
 /** Valida o JSON do banco/da API e devolve o conteúdo já sanitizado + os itens normalizados. */
@@ -234,6 +376,10 @@ export function parseActivityContent(module: string, raw: unknown): ParsedConten
   if (module === "NOME") {
     const name = (result.data as { items: NameConfig[] }).items[0]!;
     return { success: true, content: result.data, items: [], name };
+  }
+  if (module === "FOLHA") {
+    const data = result.data as { support?: SheetSupport; items: SheetExercise[] };
+    return { success: true, content: data, items: sheetPlayItems(data.items), sheet: data.support ?? {} };
   }
 
   const data = result.data as { items: RawItem[] };

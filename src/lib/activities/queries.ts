@@ -2,7 +2,7 @@ import type { ActivityModule, Difficulty, MarkerStyle } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { buildNameItem, type NamePlayItem } from "@/lib/activities/name";
 import { shuffleItemOptions } from "@/lib/activities/shuffle";
-import { parseActivityContent, type PlayItem } from "@/lib/validation/activities";
+import { parseActivityContent, type PlayItem, type SheetSupport } from "@/lib/validation/activities";
 
 export interface ActivitySummary {
   id: string;
@@ -21,6 +21,8 @@ export interface PlayableActivity extends ActivitySummary {
    * null = o apelido não tem letras (a tela pede ajuda ao professor em vez de quebrar).
    */
   name?: NamePlayItem | null;
+  /** Só na FOLHA: o bloco de apoio (leitura, figura, exemplo) mostrado acima dos exercícios. */
+  sheet?: SheetSupport;
 }
 
 export async function listAssignedActivities(studentId: string): Promise<ActivitySummary[]> {
@@ -63,5 +65,9 @@ export async function getPlayableActivity(
   if (parsed.name) {
     return { ...activity, items: [], name: buildNameItem(row.student?.displayName ?? "", parsed.name, random) };
   }
-  return { ...activity, items: shuffleItemOptions(parsed.items, random) };
+  return {
+    ...activity,
+    items: shuffleItemOptions(parsed.items, random),
+    ...(parsed.sheet ? { sheet: parsed.sheet } : {}),
+  };
 }

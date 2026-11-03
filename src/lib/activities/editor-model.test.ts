@@ -1,12 +1,16 @@
 import { contentSchemas, parseActivityContent } from "@/lib/validation/activities";
 import {
   addAnswer,
+  addStatement,
   emptyItem,
   fromContent,
   move,
   removeAnswer,
+  sheetFromContent,
   toContent,
+  toggleCorrect,
   validateItems,
+  validateSheet,
   type EditorItem,
 } from "./editor-model";
 
@@ -148,9 +152,9 @@ describe("move", () => {
   });
 });
 
-describe("Perguntas livres", () => {
-  const livre = (over: Partial<EditorItem> = {}): EditorItem => ({
-    ...emptyItem("LIVRE"),
+describe("Folha", () => {
+  const escolha = (over: Partial<EditorItem> = {}): EditorItem => ({
+    ...emptyItem("FOLHA", "escolha"),
     prompt: "Qual bicho late?",
     hint: "Ele é amigo das pessoas.",
     supportText: "Na casa da Ana tem um bicho que faz au-au.",
@@ -163,66 +167,103 @@ describe("Perguntas livres", () => {
     correctIndex: 1,
     ...over,
   });
+  const marcar = (over: Partial<EditorItem> = {}): EditorItem => ({
+    ...emptyItem("FOLHA", "marcar"),
+    prompt: "Marque os números naturais",
+    answers: [
+      { label: "2", icon: "" },
+      { label: "-3", icon: "" },
+      { label: "0", icon: "" },
+    ],
+    correctSet: [0, 2],
+    ...over,
+  });
+  const vf = (over: Partial<EditorItem> = {}): EditorItem => ({
+    ...emptyItem("FOLHA", "vf"),
+    prompt: "É verdadeiro ou falso?",
+    statements: [
+      { text: "O gelo é água no estado sólido.", correct: true },
+      { text: "O vapor é água no estado sólido.", correct: false },
+    ],
+    ...over,
+  });
+  const sheet = { text: "A **matéria** ocupa espaço.", icon: "agua" as const, example: "Ex.: a pedra é matéria." };
 
-  it("começa com 2 respostas vazias e a 1ª marcada como certa", () => {
-    expect(emptyItem("LIVRE")).toMatchObject({ answers: [{ label: "" }, { label: "" }], correctIndex: 0 });
+  it("começa pelo tipo pedido: escolha (2 respostas), marcar (3, a 1ª certa) e V/F (2 frases)", () => {
+    expect(emptyItem("FOLHA")).toMatchObject({ exType: "escolha", answers: [{ label: "" }, { label: "" }], correctIndex: 0 });
+    expect(emptyItem("FOLHA", "marcar")).toMatchObject({ exType: "marcar", correctSet: [0] });
+    expect(emptyItem("FOLHA", "marcar").answers).toHaveLength(3);
+    expect(emptyItem("FOLHA", "vf").statements).toEqual([
+      { text: "", correct: true },
+      { text: "", correct: true },
+    ]);
   });
 
-  it("toContent: a certa é a marcada pelo professor, com apoio e pictogramas", () => {
-    const content = toContent("LIVRE", [livre()]);
-    expect(contentSchemas.LIVRE.safeParse(content).success).toBe(true);
-    const r = parseActivityContent("LIVRE", content);
-    expect(r.success && r.items[0]).toMatchObject({
-      correctId: "o-cachorro",
-      options: [
-        { id: "o-gato", label: "Gato", icon: "gato" },
-        { id: "o-cachorro", label: "Cachorro", icon: "cachorro" },
-        { id: "o-peixe", label: "Peixe" },
-      ],
-      stimulus: { kind: "free", text: "Na casa da Ana tem um bicho que faz au-au.", icon: "casa" },
+  it("toContent: apoio da folha + os 3 tipos, aceito pelo schema e virando passos jogáveis", () => {
+    const content = toContent("FOLHA", [escolha(), marcar(), vf()], sheet);
+    expect(contentSchemas.FOLHA.safeParse(content).success).toBe(true);
+    expect(content.support).toEqual({ text: "A **matéria** ocupa espaço.", icon: "agua", example: "Ex.: a pedra é matéria." });
+    const r = parseActivityContent("FOLHA", content);
+    if (!r.success) throw new Error("inválido");
+    expect(r.sheet).toEqual(content.support);
+    expect(r.items.map((i) => i.key)).toEqual(["item-1", "item-2", "item-3-s1", "item-3-s2"]);
+    expect(r.items[0]).toMatchObject({ correctId: "o-cachorro", exercise: { index: 1, total: 3 } });
+    expect(r.items[1]).toMatchObject({ correctIds: ["o-2", "o-0"] });
+    expect(r.items[2]).toMatchObject({
+      correctId: "v",
+      fixedOrder: true,
+      options: [{ id: "v" }, { id: "f" }],
+      stimulus: { kind: "free", text: "O gelo é água no estado sólido." },
+      exercise: { index: 3, total: 3, part: { index: 1, total: 2 } },
     });
+    expect(r.items[3]).toMatchObject({ correctId: "f" });
   });
 
-  it("sem apoio, o estímulo não tem texto nem figura", () => {
-    const r = parseActivityContent("LIVRE", toContent("LIVRE", [livre({ supportText: " ", supportIcon: "" })]));
-    expect(r.success && r.items[0]?.stimulus).toEqual({ kind: "free" });
+  it("sem apoio, a folha não leva o campo support", () => {
+    expect(toContent("FOLHA", [escolha()])).not.toHaveProperty("support");
   });
 
-  it("ida e volta: fromContent(toContent(x)) devolve o mesmo formulário", () => {
-    const item = livre();
-    const [back] = fromContent("LIVRE", toContent("LIVRE", [item]));
-    expect(back).toMatchObject({
-      supportText: item.supportText,
-      supportIcon: "casa",
-      answers: item.answers,
-      correctIndex: 1,
-      hint: item.hint,
-    });
+  it("ida e volta: fromContent/sheetFromContent devolvem o mesmo formulário", () => {
+    const content = toContent("FOLHA", [escolha(), marcar(), vf()], sheet);
+    const back = fromContent("FOLHA", content);
+    expect(back[0]).toMatchObject({ exType: "escolha", correctIndex: 1, supportIcon: "casa", answers: escolha().answers });
+    expect(back[1]).toMatchObject({ exType: "marcar", correctSet: [0, 2] });
+    expect(back[2]).toMatchObject({ exType: "vf", statements: vf().statements });
+    expect(sheetFromContent(content)).toEqual(sheet);
   });
 
-  it("valida respostas vazias, repetidas e a quantidade", () => {
-    expect(validateItems("LIVRE", [livre()])).toEqual([]);
-    expect(validateItems("LIVRE", [livre({ answers: [{ label: "Gato", icon: "" }, { label: " ", icon: "" }], correctIndex: 0 })]))
-      .toContain("Item 1: escreva a resposta 2 (ou remova-a).");
-    expect(validateItems("LIVRE", [livre({ answers: [{ label: "Gato", icon: "" }, { label: "gato", icon: "" }], correctIndex: 0 })]))
-      .toContain("Item 1: há respostas repetidas.");
-    expect(validateItems("LIVRE", [livre({ answers: [{ label: "Gato", icon: "" }], correctIndex: 0 })]))
-      .toContain("Item 1: use de 2 a 4 respostas.");
-    expect(validateItems("LIVRE", [livre({ supportText: "x".repeat(301) })]))
-      .toContain("Item 1: o texto de apoio pode ter até 300 letras.");
+  it("valida respostas, frases, marcar todas e o bloco de apoio", () => {
+    expect(validateItems("FOLHA", [escolha(), marcar(), vf()])).toEqual([]);
+    const twins = escolha({ answers: [{ label: "Gato", icon: "" }, { label: "gato", icon: "" }], correctIndex: 0 });
+    expect(validateItems("FOLHA", [twins])).toContain("Exercício 1: há respostas repetidas.");
+    expect(validateItems("FOLHA", [marcar({ correctSet: [0, 1, 2] })])).toContain(
+      "Exercício 1: deixe pelo menos uma resposta que não vale (senão não há o que escolher).",
+    );
+    expect(validateItems("FOLHA", [vf({ statements: [{ text: " ", correct: true }] })])).toContain(
+      "Exercício 1: escreva a frase 1 (ou remova-a).",
+    );
+    expect(validateSheet({ ...sheet, text: "A **matéria ocupa espaço." })).toContain(
+      "Um destaque ficou aberto: use **palavra** (dois asteriscos antes e depois).",
+    );
+    expect(validateSheet({ ...sheet, text: "x".repeat(801) })).toContain("O texto de leitura pode ter até 800 letras.");
   });
 
-  it("remover uma resposta mantém a certa (ou volta para a 1ª se a certa sair)", () => {
-    expect(removeAnswer(livre({ correctIndex: 2 }), 0)).toMatchObject({ correctIndex: 1 });
-    expect(removeAnswer(livre({ correctIndex: 0 }), 2)).toMatchObject({ correctIndex: 0 });
-    expect(removeAnswer(livre({ correctIndex: 1 }), 1)).toMatchObject({ correctIndex: 0 });
-    expect(removeAnswer(livre(), 1).answers.map((a) => a.label)).toEqual(["Gato", "Peixe"]);
+  it("remover resposta mantém as certas; marcar todas nunca fica sem nenhuma certa", () => {
+    expect(removeAnswer(escolha({ correctIndex: 2 }), 0)).toMatchObject({ correctIndex: 1 });
+    expect(removeAnswer(escolha({ correctIndex: 1 }), 1)).toMatchObject({ correctIndex: 0 });
+    expect(removeAnswer(marcar({ correctSet: [0, 2] }), 1)).toMatchObject({ correctSet: [0, 1] });
+    expect(removeAnswer(marcar({ correctSet: [1] }), 1)).toMatchObject({ correctSet: [0] });
+    expect(toggleCorrect(marcar({ correctSet: [0] }), 0).correctSet).toEqual([0]); // não desmarca a última
+    expect(toggleCorrect(marcar({ correctSet: [0] }), 1).correctSet).toEqual([0, 1]);
   });
 
-  it("no máximo 4 respostas (uma por marcador)", () => {
-    const four = addAnswer(livre());
+  it("no máximo 4 respostas (uma por marcador) e 6 frases", () => {
+    const four = addAnswer(escolha());
     expect(four.answers).toHaveLength(4);
     expect(addAnswer(four).answers).toHaveLength(4);
+    let s = vf();
+    for (let i = 0; i < 6; i++) s = addStatement(s);
+    expect(s.statements).toHaveLength(6);
   });
 });
 

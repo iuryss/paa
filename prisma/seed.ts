@@ -118,17 +118,20 @@ async function main() {
     },
     {
       id: "seed-livre",
-      module: "LIVRE" as const,
+      module: "FOLHA" as const,
       title: "Bichos e sentimentos",
-      instruction: "Leia e escolha a resposta",
+      instruction: "Leia e responda",
       content: {
+        support: {
+          text: "Na casa da Ana mora um **cachorro**. Ele late quando alguém chega e balança o rabo quando está **feliz**.",
+          icon: "casa",
+        },
         items: [
           {
+            type: "escolha",
             key: "bicho-late",
             prompt: "Qual bicho faz au-au?",
             hint: "Ele é amigo das pessoas e balança o rabo.",
-            support: "Na casa da Ana mora um bicho. Ele late quando alguém chega.",
-            supportIcon: "casa",
             options: [
               { id: "o-gato", label: "Gato", icon: "gato" },
               { id: "o-cachorro", label: "Cachorro", icon: "cachorro" },
@@ -137,32 +140,33 @@ async function main() {
             correctId: "o-cachorro",
           },
           {
-            key: "ana-feliz",
-            prompt: "Como a Ana se sente?",
-            hint: "Ela sorriu bem grande.",
-            support: "A Ana ganhou um abraço da vovó. Ela sorriu bem grande.",
-            supportIcon: "coracao",
+            type: "marcar",
+            key: "bichos-pelo",
+            prompt: "Marque os bichos que têm pelo",
+            hint: "O peixe vive na água e tem escamas.",
             options: [
-              { id: "o-feliz", label: "Feliz", icon: "feliz" },
-              { id: "o-triste", label: "Triste", icon: "triste" },
+              { id: "o-gato", label: "Gato", icon: "gato" },
+              { id: "o-peixe", label: "Peixe", icon: "peixe" },
+              { id: "o-cachorro", label: "Cachorro", icon: "cachorro" },
             ],
-            correctId: "o-feliz",
+            correctIds: ["o-gato", "o-cachorro"],
           },
           {
-            key: "chuva",
-            prompt: "O que cai do céu quando chove?",
-            supportIcon: "nuvem",
-            options: [
-              { id: "o-agua", label: "Água", icon: "agua" },
-              { id: "o-sol", label: "Sol", icon: "sol" },
-              { id: "o-leite", label: "Leite", icon: "leite" },
+            type: "vf",
+            key: "ana-feliz",
+            prompt: "É verdadeiro ou falso?",
+            hint: "Leia o texto de novo.",
+            supportIcon: "feliz",
+            statements: [
+              { id: "s1", text: "O cachorro da Ana late quando alguém chega.", correct: true },
+              { id: "s2", text: "O cachorro mora na escola.", correct: false },
             ],
-            correctId: "o-agua",
           },
         ],
       },
     },
   ];
+
 
   for (const a of activities) {
     await prisma.activity.upsert({
@@ -199,10 +203,10 @@ async function main() {
   });
 
   // Sessões de demonstração (só dev): 8 sessões em ~2 semanas em que o aluno ganha autonomia.
-  // A atividade livre fica sem sessões, para o professor poder editá-la (sessões travam o conteúdo).
+  // A folha fica sem sessões, para o professor poder editá-la (sessões travam o conteúdo).
   await prisma.activitySession.deleteMany({ where: { id: { startsWith: "seed-sess-" } } });
   const DAY = 24 * 60 * 60 * 1000;
-  const withSessions = activities.filter((a) => a.module !== "LIVRE");
+  const withSessions = activities.filter((a) => a.module !== "FOLHA");
   for (let i = 0; i < 8; i++) {
     const activity = withSessions[i % withSessions.length]!;
     const keys = (activity.content.items as { key: string }[]).map((it) => it.key);

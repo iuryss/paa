@@ -69,9 +69,11 @@ const matematica = {
   ],
 };
 
-const livre = {
+/** Folha com um exercício só (era uma "pergunta livre", migrada para FOLHA). */
+const bichos = {
   items: [
     {
+      type: "escolha",
       key: "bicho-late",
       prompt: "Qual bicho faz au-au?",
       hint: "Ele balança o rabo.",
@@ -87,12 +89,54 @@ const livre = {
   ],
 };
 
+/** Folha completa: leitura com destaque, exemplo e os 3 tipos de exercício. */
+const materia = {
+  support: {
+    text: "**Matéria** é tudo o que tem massa e ocupa espaço.",
+    icon: "agua",
+    example: "Ex.: a pedra é matéria; a saudade não é.",
+  },
+  items: [
+    {
+      type: "escolha",
+      key: "item-1",
+      prompt: "O que é matéria?",
+      options: [
+        { id: "o-ocupa", label: "O que ocupa espaço" },
+        { id: "o-ar", label: "Só o que é sólido" },
+      ],
+      correctId: "o-ocupa",
+    },
+    {
+      type: "marcar",
+      key: "item-2",
+      prompt: "Marque o que é matéria",
+      hint: "Matéria dá para pegar ou pesar.",
+      options: [
+        { id: "o-pedra", label: "Pedra" },
+        { id: "o-saudade", label: "Saudade" },
+        { id: "o-agua", label: "Água" },
+      ],
+      correctIds: ["o-pedra", "o-agua"],
+    },
+    {
+      type: "vf",
+      key: "item-3",
+      prompt: "É verdadeiro ou falso?",
+      statements: [
+        { id: "s1", text: "A água ocupa espaço.", correct: true },
+        { id: "s2", text: "A pedra não tem massa.", correct: false },
+      ],
+    },
+  ],
+};
+
 export interface Seeded {
   teacherId: string;
   otherTeacherId: string;
   studentId: string;
   lockStudentId: string;
-  activities: { grafia: string; localizacao: string; matematica: string; livre: string; nome: string };
+  activities: { grafia: string; localizacao: string; matematica: string; livre: string; nome: string; materia: string };
 }
 
 /** Apaga TUDO do banco de testes e recria o mínimo conhecido. Cada arquivo de teste começa limpo. */
@@ -121,21 +165,22 @@ export async function resetAndSeed(): Promise<Seeded> {
   const sol = await student(STUDENT);
   const lua = await student(LOCK_STUDENT);
 
-  const activity = (id: string, module: "GRAFIA" | "LOCALIZACAO" | "MATEMATICA" | "LIVRE" | "NOME", title: string, instruction: string, content: object) =>
+  const activity = (id: string, module: "GRAFIA" | "LOCALIZACAO" | "MATEMATICA" | "FOLHA" | "NOME", title: string, instruction: string, content: object) =>
     prisma.activity.create({
       data: { id, module, title, instruction, content: content as Prisma.InputJsonValue, published: true, authorId: teacher.id },
     });
   const g = await activity("e2e-grafia", "GRAFIA", "Letras", "Ache a letra pequena", grafia);
   const l = await activity("e2e-localizacao", "LOCALIZACAO", "Onde fica?", "Toque no lado certo do mapa", localizacao);
   const m = await activity("e2e-matematica", "MATEMATICA", "Contas", "Conte as maçãs", matematica);
-  const f = await activity("e2e-livre", "LIVRE", "Bichos", "Leia e escolha a resposta", livre);
+  const f = await activity("e2e-livre", "FOLHA", "Bichos", "Leia e escolha a resposta", bichos);
+  const fm = await activity("e2e-materia", "FOLHA", "Matéria", "Leia e responda", materia);
   // Sem modelo e com 2 letras extras: o e2e consegue ver a escada de dicas inteira.
   const n = await activity("e2e-nome", "NOME", "Meu nome", "Monte o seu nome", {
     items: [{ key: "nome", prompt: "Escreva seu nome", extraLetters: 2, letterCase: "MAIUSCULAS", showModel: false }],
   });
 
   for (const s of [sol, lua]) {
-    for (const a of [g, l, m, f, n]) {
+    for (const a of [g, l, m, f, n, fm]) {
       await prisma.assignment.create({ data: { activityId: a.id, studentId: s.id, assignedBy: teacher.id } });
     }
   }
@@ -145,7 +190,7 @@ export async function resetAndSeed(): Promise<Seeded> {
     otherTeacherId: other.id,
     studentId: sol.id,
     lockStudentId: lua.id,
-    activities: { grafia: g.id, localizacao: l.id, matematica: m.id, livre: f.id, nome: n.id },
+    activities: { grafia: g.id, localizacao: l.id, matematica: m.id, livre: f.id, nome: n.id, materia: fm.id },
   };
 }
 
