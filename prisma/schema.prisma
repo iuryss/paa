@@ -118,6 +118,7 @@ model User {
   auditLogs         AuditLog[]
   invitationsSent   Invitation[]     @relation("InvitationAuthor")
   passwordResets    PasswordReset[]
+  images            Image[]
 
   @@index([role])
 }
@@ -298,6 +299,30 @@ model ConsentRecord {
 }
 
 /// Trilha de auditoria de acessos a dados de alunos (sem conteúdo sensível no `meta`).
+// ───────────────────────── Imagens do professor ─────────────────────────
+
+/// Imagem enviada por um adulto para usar nas atividades (esquemas, objetos, gráficos).
+/// LGPD: o envio exige confirmar que NÃO é foto de aluno; o servidor apaga os metadados (EXIF/GPS)
+/// antes de guardar. Fica no próprio banco (sem serviço pago), com limite de tamanho por imagem.
+model Image {
+  id        String   @id @default(cuid())
+  ownerId   String
+  /// image/png, image/jpeg ou image/webp (SVG nunca: pode carregar script).
+  mime      String
+  width     Int
+  height    Int
+  /// Tamanho em bytes, já sem metadados.
+  size      Int
+  data      Bytes
+  /// Texto alternativo (leitor de tela). Obrigatório.
+  alt       String
+  createdAt DateTime @default(now())
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+}
+
 model AuditLog {
   id        String   @id @default(cuid())
   actorId   String?

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useId, useMemo, useState } from "react";
 import { ActivityRunner } from "@/components/activity-runner";
 import { NameRunner } from "@/components/name-runner";
+import { ImageField } from "@/components/activities/image-field";
 import { MarkerShape } from "@/components/marker-shape";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -201,6 +202,7 @@ function SheetFields({
           </p>
         </div>
         <IconSelect id={`${uid}-sheet-icon`} label="Figura da leitura" value={sheet.icon} onChange={(icon) => onChange({ icon })} />
+        <ImageField id={`${uid}-sheet-image`} label="Imagem da leitura" value={sheet.image} onChange={(image) => onChange({ image })} />
         <div className="flex flex-col gap-2">
           <Label htmlFor={`${uid}-sheet-example`}>Exemplo resolvido (opcional)</Label>
           <textarea
@@ -261,6 +263,12 @@ function ExerciseFields({
         label="Figura deste exercício"
         value={item.supportIcon}
         onChange={(supportIcon) => onChange({ supportIcon })}
+      />
+      <ImageField
+        id={`${id}-support-image`}
+        label="Imagem deste exercício"
+        value={item.supportImage}
+        onChange={(supportImage) => onChange({ supportImage })}
       />
 
       {item.exType === "vf" ? (
@@ -339,6 +347,12 @@ function ExerciseFields({
                   label={`Figura da resposta ${j + 1}`}
                   value={answer.icon}
                   onChange={(icon) => setAnswer(j, { icon })}
+                />
+                <ImageField
+                  id={`${id}-a${j}-image`}
+                  label={`Imagem da resposta ${j + 1}`}
+                  value={answer.image}
+                  onChange={(image) => setAnswer(j, { image })}
                 />
                 <Button
                   icon={Trash2}

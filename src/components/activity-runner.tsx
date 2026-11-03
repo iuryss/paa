@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Feedback } from "@/components/ui/feedback";
 import { SheetSupportBlock } from "@/components/sheet-support";
+import { UploadedImage } from "@/components/uploaded-image";
 import {
   answer,
   hintedOptionIndex,
@@ -202,6 +203,7 @@ export function ActivityRunner({
                 data-marker={marker.shape}
                 className={cn(
                   "flex min-h-target-lg items-center justify-center gap-3 rounded-[20px] border-2 px-4 py-3",
+                  option.image && "flex-wrap",
                   "select-none touch-manipulation text-ink",
                   optionTextClass(item.stimulus),
                   isCorrectChosen
@@ -212,6 +214,7 @@ export function ActivityRunner({
                   state.status === "correct" && !isCorrectChosen && "opacity-70",
                 )}
               >
+                {option.image ? <UploadedImage image={option.image} className="max-h-24 basis-full" /> : null}
                 <MarkerShape marker={marker} />
                 <AdaptiveLabel
                   text={option.label}

@@ -11,6 +11,7 @@ import {
   type Direction,
   type ExerciseType,
   type IconName,
+  type ImageRef,
   type SheetSupport,
   type SupportedModule,
 } from "@/lib/validation/activities";
@@ -18,6 +19,7 @@ import {
 export interface EditorAnswer {
   label: string;
   icon: IconName | "";
+  image: ImageRef | null;
 }
 
 export interface EditorStatement {
@@ -29,10 +31,11 @@ export interface EditorStatement {
 export interface SheetDraft {
   text: string;
   icon: IconName | "";
+  image: ImageRef | null;
   example: string;
 }
 
-export const EMPTY_SHEET: SheetDraft = { text: "", icon: "", example: "" };
+export const EMPTY_SHEET: SheetDraft = { text: "", icon: "", image: null, example: "" };
 
 export const EXERCISE_LABEL: Record<ExerciseType, string> = {
   escolha: "Escolher a resposta certa",
@@ -56,6 +59,8 @@ export interface EditorItem {
   /** Folha: texto e figura de apoio do exercício (opcionais). */
   supportText: string;
   supportIcon: IconName | "";
+  /** Folha: imagem enviada pelo professor para o apoio do exercício. */
+  supportImage: ImageRef | null;
   /** Folha (escolha e marcar todas): de 2 a 4 respostas. */
   answers: EditorAnswer[];
   /** Escolha: o índice da certa. */
@@ -134,7 +139,7 @@ export const MIN_ANSWERS = 2;
 export const MAX_ANSWERS = MAX_MARKERS;
 export const MAX_ITEMS = 20;
 
-const emptyAnswer = (): EditorAnswer => ({ label: "", icon: "" });
+const emptyAnswer = (): EditorAnswer => ({ label: "", icon: "", image: null });
 const emptyStatement = (): EditorStatement => ({ text: "", correct: true });
 
 export function emptyItem(module: SupportedModule, exType: ExerciseType = "escolha"): EditorItem {
@@ -145,6 +150,7 @@ export function emptyItem(module: SupportedModule, exType: ExerciseType = "escol
     exType,
     supportText: "",
     supportIcon: "",
+    supportImage: null,
     answers: [],
     correctIndex: 0,
     correctSet: [],
@@ -234,10 +240,13 @@ function correctLabel(module: SupportedModule, item: EditorItem): string {
   return item.position;
 }
 
+const cleanImage = (image: ImageRef): ImageRef => ({ id: image.id, alt: image.alt.trim() });
+
 function sheetToContent(sheet: SheetDraft): { support?: SheetSupport } {
   const support: SheetSupport = {
     ...(sheet.text.trim() ? { text: sheet.text.trim() } : {}),
     ...(sheet.icon ? { icon: sheet.icon } : {}),
+    ...(sheet.image ? { image: cleanImage(sheet.image) } : {}),
     ...(sheet.example.trim() ? { example: sheet.example.trim() } : {}),
   };
   return Object.keys(support).length > 0 ? { support } : {};
@@ -248,6 +257,7 @@ function exerciseToContent(item: EditorItem, common: Record<string, unknown>) {
   const support = {
     ...(item.supportText.trim() ? { support: item.supportText.trim() } : {}),
     ...(item.supportIcon ? { supportIcon: item.supportIcon } : {}),
+    ...(item.supportImage ? { supportImage: cleanImage(item.supportImage) } : {}),
   };
   if (item.exType === "vf") {
     return {
@@ -259,7 +269,12 @@ function exerciseToContent(item: EditorItem, common: Record<string, unknown>) {
   }
   const labels = item.answers.map((a) => a.label.trim());
   const ids = uniqueIds("o", labels);
-  const options = item.answers.map((a, j) => ({ id: ids[j]!, label: labels[j]!, ...(a.icon ? { icon: a.icon } : {}) }));
+  const options = item.answers.map((a, j) => ({
+    id: ids[j]!,
+    label: labels[j]!,
+    ...(a.icon ? { icon: a.icon } : {}),
+    ...(a.image ? { image: cleanImage(a.image) } : {}),
+  }));
   if (item.exType === "marcar") {
     return { type: "marcar", ...common, ...support, options, correctIds: item.correctSet.map((j) => ids[j] ?? "") };
   }
@@ -323,7 +338,7 @@ interface StoredItem {
   /** Folha: o tipo do exercício. */
   type?: ExerciseType;
   /** Ausentes no módulo NOME (só configuração) e no V/F. */
-  options?: { id: string; label: string; icon?: IconName }[];
+  options?: { id: string; label: string; icon?: IconName; image?: ImageRef }[];
   correctId?: string;
   correctIds?: string[];
   statements?: { id: string; text: string; correct: boolean }[];
@@ -332,6 +347,7 @@ interface StoredItem {
   showModel?: boolean;
   support?: string;
   supportIcon?: IconName;
+  supportImage?: ImageRef;
   piece?: { label: string; icon?: IconName };
   position?: Direction;
   display?: string;
@@ -358,7 +374,8 @@ export function fromContent(module: SupportedModule, content: unknown): EditorIt
       nameModel: s.showModel ?? true,
       supportText: s.support ?? "",
       supportIcon: s.supportIcon ?? "",
-      answers: isSheet ? options.map((o) => ({ label: o.label, icon: o.icon ?? "" })) : [],
+      supportImage: s.supportImage ?? null,
+      answers: isSheet ? options.map((o) => ({ label: o.label, icon: o.icon ?? "", image: o.image ?? null })) : [],
       correctIndex: isSheet ? Math.max(0, options.findIndex((o) => o.id === s.correctId)) : 0,
       correctSet: (s.correctIds ?? []).map((id) => options.findIndex((o) => o.id === id)).filter((j) => j >= 0),
       statements: (s.statements ?? []).map((st) => ({ text: st.text, correct: st.correct })),
@@ -404,6 +421,8 @@ export function validateItems(module: SupportedModule, items: EditorItem[]): str
     }
 
     if (module === "FOLHA") {
+      const images = [item.supportImage, ...item.answers.map((a) => a.image)].filter((img): img is ImageRef => img !== null);
+      if (images.some((img) => img.alt.trim().length < 3)) errors.push(`${n}: descreva cada imagem (para quem não enxerga).`);
       if (item.supportText.trim().length > MAX_SUPPORT_TEXT) {
         errors.push(`${n}: o texto de apoio pode ter até ${MAX_SUPPORT_TEXT} letras.`);
       }
@@ -462,13 +481,14 @@ export function validateItems(module: SupportedModule, items: EditorItem[]): str
 /** JSON já validado da folha → bloco de apoio no editor. */
 export function sheetFromContent(content: unknown): SheetDraft {
   const support = (content as { support?: SheetSupport } | null)?.support;
-  return { text: support?.text ?? "", icon: support?.icon ?? "", example: support?.example ?? "" };
+  return { text: support?.text ?? "", icon: support?.icon ?? "", image: support?.image ?? null, example: support?.example ?? "" };
 }
 
 export function validateSheet(sheet: SheetDraft): string[] {
   const errors: string[] = [];
   if (sheet.text.trim().length > MAX_SHEET_TEXT) errors.push(`O texto de leitura pode ter até ${MAX_SHEET_TEXT} letras.`);
   if (sheet.example.trim().length > MAX_EXAMPLE_TEXT) errors.push(`O exemplo pode ter até ${MAX_EXAMPLE_TEXT} letras.`);
+  if (sheet.image && sheet.image.alt.trim().length < 3) errors.push("Descreva a imagem da leitura (para quem não enxerga).");
   const marks = sheet.text.split("**").length - 1;
   if (marks % 2 !== 0) errors.push("Um destaque ficou aberto: use **palavra** (dois asteriscos antes e depois).");
   return errors;

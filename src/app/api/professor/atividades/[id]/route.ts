@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { deleteActivity, updateActivity } from "@/lib/activities/service";
 import { guard } from "@/lib/auth/guard";
+import { collectImageIds, findMissingImages } from "@/lib/images/service";
 import { ADULT_ROLES } from "@/lib/rbac";
 import { idSchema, updateActivitySchema } from "@/lib/validation/activities";
 
@@ -23,6 +24,11 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const parsed = updateActivitySchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_input", message: parsed.error.issues[0]?.message }, { status: 422 });
+  }
+
+  const missing = "content" in parsed.data ? await findMissingImages(collectImageIds(parsed.data.content)) : [];
+  if (missing.length > 0) {
+    return NextResponse.json({ error: "missing_images", message: "Uma imagem desta atividade não existe mais." }, { status: 422 });
   }
 
   const result = await updateActivity(access.user.id, id.data, parsed.data);
