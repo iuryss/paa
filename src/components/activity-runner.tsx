@@ -11,6 +11,7 @@ import { Pictogram } from "@/components/pictogram";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Feedback } from "@/components/ui/feedback";
+import { PlaceStep } from "@/components/place-step";
 import { SheetSupportBlock } from "@/components/sheet-support";
 import { UploadedImage } from "@/components/uploaded-image";
 import {
@@ -183,6 +184,18 @@ export function ActivityRunner({
 
       {sheet ? <SheetSupportBlock sheet={sheet} /> : null}
 
+      {item.place ? (
+        // Encaixar (lacunas, ligar pares): o passo cuida das peças, do feedback e da dica.
+        <PlaceStep
+          key={item.key}
+          item={item}
+          stimulus={<ActivityStimulus stimulus={item.stimulus} />}
+          now={now}
+          send={send}
+          onDone={() => setState((s) => ({ ...s, status: "correct" }))}
+        />
+      ) : (
+      <>
       <Card className="flex flex-col items-center gap-12">
         <ActivityStimulus stimulus={item.stimulus} />
         <div role="group" aria-label="Respostas" className="grid w-full grid-cols-2 gap-6">
@@ -238,9 +251,11 @@ export function ActivityRunner({
           </Feedback>
         ) : null}
       </div>
+      </>
+      )}
 
       <div className="flex min-h-[88px] flex-wrap items-center justify-between gap-6">
-        {state.status === "correct" ? (
+        {state.status === "correct" || item.place ? (
           <span />
         ) : (
           <Button icon={Lightbulb} onClick={() => setState(requestHint(item, state))}>
