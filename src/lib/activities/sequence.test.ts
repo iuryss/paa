@@ -50,7 +50,7 @@ describe("placeTile", () => {
     s = placeTile(item, s, B, 1).state;
     const second = placeTile(item, s, N, 2);
     expect(second.attempt?.helpLevel).toBe("NONE"); // a dica vale só para a PRÓXIMA tentativa
-    expect(second.state).toMatchObject({ letterHint: true, modelVisible: true, highlight: false, help: "VERBAL_HINT" });
+    expect(second.state).toMatchObject({ told: true, modelVisible: true, highlight: false, help: "VERBAL_HINT" });
 
     const third = placeTile(item, second.state, B, 3);
     expect(third.attempt?.helpLevel).toBe("VERBAL_HINT");
@@ -59,15 +59,15 @@ describe("placeTile", () => {
     const ok = placeTile(item, third.state, A1, 4);
     expect(ok.attempt).toMatchObject({ correct: true, helpLevel: "VISUAL_HINT", attemptNo: 4 });
     // A próxima casa começa sem ajuda, mas o modelo continua à vista.
-    expect(ok.state).toMatchObject({ help: "NONE", letterHint: false, highlight: false, modelVisible: true });
+    expect(ok.state).toMatchObject({ help: "NONE", told: false, highlight: false, modelVisible: true });
   });
 });
 
 describe("requestSequenceHint e hintTile", () => {
   it("1º pedido: letra + modelo (VERBAL_HINT); 2º: destaque (VISUAL_HINT)", () => {
-    const first = requestSequenceHint(initialSequenceState(item, 0));
-    expect(first).toMatchObject({ letterHint: true, modelVisible: true, highlight: false, help: "VERBAL_HINT" });
-    expect(requestSequenceHint(first)).toMatchObject({ highlight: true, help: "VISUAL_HINT" });
+    const first = requestSequenceHint(item, initialSequenceState(item, 0));
+    expect(first).toMatchObject({ told: true, modelVisible: true, highlight: false, help: "VERBAL_HINT" });
+    expect(requestSequenceHint(item, first)).toMatchObject({ highlight: true, help: "VISUAL_HINT" });
   });
 
   it("o destaque aponta uma peça livre com a letra da casa atual", () => {

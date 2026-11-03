@@ -210,7 +210,7 @@ export function NameRunner({
 
   const hintText = state.highlight
     ? `Toque na letra ${nextLetter}, que está em destaque.`
-    : state.letterHint
+    : state.told
       ? `A próxima letra é ${nextLetter}.`
       : null;
 
@@ -308,7 +308,7 @@ export function NameRunner({
         {state.status === "done" ? (
           <span />
         ) : (
-          <Button icon={Lightbulb} onClick={() => setState(requestSequenceHint(state))}>
+          <Button icon={Lightbulb} onClick={() => setState(requestSequenceHint(item, state))}>
             Dica
           </Button>
         )}
