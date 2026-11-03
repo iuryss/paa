@@ -238,9 +238,9 @@ describe("ActivityEditor — itens", () => {
       ...emptyItem("FOLHA", "marcar"),
       prompt: "Marque o que é matéria",
       answers: [
-        { label: "Pedra", icon: "" as const },
-        { label: "Saudade", icon: "" as const },
-        { label: "Água", icon: "" as const },
+        { label: "Pedra", icon: "" as const, image: null },
+        { label: "Saudade", icon: "" as const, image: null },
+        { label: "Água", icon: "" as const, image: null },
       ],
       correctSet: [0, 2],
     };
@@ -251,7 +251,7 @@ describe("ActivityEditor — itens", () => {
         difficulty: "INICIAL",
         published: false,
         items: [marcar],
-        sheet: { text: "A **matéria** ocupa espaço.", icon: "", example: "" },
+        sheet: { text: "A **matéria** ocupa espaço.", icon: "", image: null, example: "" },
       },
     });
     await user.click(screen.getByRole("button", { name: "Pré-visualizar" }));
