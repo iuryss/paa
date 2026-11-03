@@ -1,6 +1,7 @@
 import { contentSchemas, parseActivityContent } from "@/lib/validation/activities";
 import {
   addAnswer,
+  addPair,
   addStatement,
   emptyItem,
   fromContent,
@@ -345,5 +346,61 @@ describe("Folha com imagens do professor", () => {
   it("o schema recusa id de imagem que não é do nosso formato (ex.: link externo)", () => {
     const content = toContent("FOLHA", [item], { ...sheet, image: { id: "https://exemplo.test/x.png", alt: "x" } });
     expect(contentSchemas.FOLHA.safeParse(content).success).toBe(false);
+  });
+});
+
+describe("Folha: completar lacunas e ligar pares", () => {
+  const lacunas: EditorItem = {
+    ...emptyItem("FOLHA", "lacunas"),
+    gapText: "A [matéria] tem [massa] e [volume].",
+    extras: ["cor", " "],
+  };
+  const ligar: EditorItem = {
+    ...emptyItem("FOLHA", "ligar"),
+    pairs: [
+      { left: { label: "Bola", icon: "", image: null }, right: { label: "Círculo", icon: "circulo", image: null } },
+      { left: { label: "Dado", icon: "", image: null }, right: { label: "Quadrado", icon: "", image: null } },
+    ],
+  };
+
+  it("começam com o pedido pronto: lacunas com 1 extra vazia, ligar com 2 pares", () => {
+    expect(emptyItem("FOLHA", "lacunas")).toMatchObject({ prompt: "Complete com as palavras", extras: [""] });
+    expect(emptyItem("FOLHA", "ligar").pairs).toHaveLength(2);
+  });
+
+  it("toContent: frase com colchetes + extras (vazias somem); pares com ids p1, p2…; ida e volta igual", () => {
+    const content = toContent("FOLHA", [lacunas, ligar]);
+    expect(contentSchemas.FOLHA.safeParse(content).success).toBe(true);
+    expect(content.items[0]).toMatchObject({ type: "lacunas", text: "A [matéria] tem [massa] e [volume].", extras: ["cor"] });
+    expect(content.items[1]).toMatchObject({
+      type: "ligar",
+      pairs: [
+        { id: "p1", left: { label: "Bola" }, right: { label: "Círculo", icon: "circulo" } },
+        { id: "p2", left: { label: "Dado" }, right: { label: "Quadrado" } },
+      ],
+    });
+    const back = fromContent("FOLHA", content);
+    expect(back[0]).toMatchObject({ exType: "lacunas", gapText: lacunas.gapText, extras: ["cor"] });
+    expect(back[1]).toMatchObject({ exType: "ligar", pairs: ligar.pairs });
+  });
+
+  it("valida: sem colchetes, extra igual a resposta, lado vazio e pares repetidos", () => {
+    expect(validateItems("FOLHA", [lacunas, ligar])).toEqual([]);
+    expect(validateItems("FOLHA", [{ ...lacunas, gapText: "Sem lacunas." }])).toContain(
+      "Exercício 1: coloque entre [colchetes] as palavras que a criança vai encaixar.",
+    );
+    expect(validateItems("FOLHA", [{ ...lacunas, extras: ["Massa"] }])).toContain(
+      "Exercício 1: uma palavra extra é igual a uma resposta (ela também valeria).",
+    );
+    const blank = { ...ligar, pairs: [ligar.pairs[0]!, { ...ligar.pairs[1]!, right: { label: " ", icon: "" as const, image: null } }] };
+    expect(validateItems("FOLHA", [blank])).toContain("Exercício 1: escreva os dois lados do par 2.");
+    const twins = { ...ligar, pairs: [ligar.pairs[0]!, { ...ligar.pairs[1]!, right: { label: "círculo", icon: "" as const, image: null } }] };
+    expect(validateItems("FOLHA", [twins])).toContain("Exercício 1: há pares repetidos (cada um liga com um só).");
+  });
+
+  it("no máximo 5 pares", () => {
+    let item = ligar;
+    for (let i = 0; i < 5; i++) item = addPair(item);
+    expect(item.pairs).toHaveLength(5);
   });
 });

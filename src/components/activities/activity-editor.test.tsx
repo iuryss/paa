@@ -269,6 +269,49 @@ describe("ActivityEditor — itens", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("Folha: monta lacunas e ligar pares pelos botões e salva no formato certo", async () => {
+    reply(201, { id: "folha67890" });
+    const user = userEvent.setup();
+    setup("FOLHA", {
+      initial: { title: "", instruction: "", difficulty: "INICIAL", published: false, items: [emptyItem("FOLHA", "lacunas")] },
+    });
+    await fillMeta(user);
+
+    const ex1 = within(screen.getByRole("group", { name: "Exercício 1" }));
+    expect(ex1.getByText("Completar lacunas")).toBeInTheDocument();
+    expect(ex1.getByText("Nenhuma lacuna ainda.")).toBeInTheDocument();
+    await user.type(ex1.getByLabelText("Frase com lacunas"), "A matéria tem [[massa] e [[volume].");
+    expect(ex1.getByText("Lacunas (2): massa, volume")).toBeInTheDocument();
+    await user.type(ex1.getByLabelText("Palavra extra 1"), "cor");
+
+    await user.click(screen.getByRole("button", { name: "Ligar pares" }));
+    const ex2 = within(screen.getByRole("group", { name: "Exercício 2" }));
+    expect(ex2.getByLabelText("Enunciado")).toHaveValue("Ligue cada um ao seu par");
+    await user.type(ex2.getByLabelText("Esquerda 1"), "Bola");
+    await user.type(ex2.getByLabelText("Direita 1"), "Círculo");
+    await user.type(ex2.getByLabelText("Esquerda 2"), "Dado");
+    await user.type(ex2.getByLabelText("Direita 2"), "Quadrado");
+    expect(ex2.getByRole("button", { name: "Remover par 1" })).toBeDisabled(); // mínimo de 2 pares
+
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body);
+    expect(body.content.items[0]).toEqual({
+      type: "lacunas",
+      key: "item-1",
+      prompt: "Complete com as palavras",
+      text: "A matéria tem [massa] e [volume].",
+      extras: ["cor"],
+    });
+    expect(body.content.items[1]).toMatchObject({
+      type: "ligar",
+      pairs: [
+        { id: "p1", left: { label: "Bola" }, right: { label: "Círculo" } },
+        { id: "p2", left: { label: "Dado" }, right: { label: "Quadrado" } },
+      ],
+    });
+  }, 20_000); // muita digitação simulada
+
   it("Folha: resposta vazia e destaque aberto são apontados antes de salvar", async () => {
     const user = userEvent.setup();
     setup("FOLHA", {
@@ -430,7 +473,7 @@ describe("ActivityEditor — acessibilidade", () => {
     const c = setup("LOCALIZACAO", { activityId: "act1234567", sessionCount: 2, initial: { ...filled, items: [emptyItem("LOCALIZACAO")] } });
     expect(await axe(c.container)).toHaveNoViolations();
     c.unmount();
-    const d = setup("FOLHA", { initial: { ...filled, items: [emptyItem("FOLHA"), emptyItem("FOLHA", "marcar"), emptyItem("FOLHA", "vf")] } });
+    const d = setup("FOLHA", { initial: { ...filled, items: [emptyItem("FOLHA"), emptyItem("FOLHA", "marcar"), emptyItem("FOLHA", "vf"), emptyItem("FOLHA", "lacunas"), emptyItem("FOLHA", "ligar")] } });
     expect(await axe(d.container)).toHaveNoViolations();
     d.unmount();
     const e = setup("NOME", { initial: { ...filled, items: [emptyItem("NOME")] } });
