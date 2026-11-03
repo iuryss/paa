@@ -2,6 +2,7 @@ import { z } from "zod";
 import { DEFAULT_MARKER_STYLE, MARKER_STYLES } from "@/lib/activities/markers";
 import { LETTER_CASES, MAX_EXTRA_LETTERS, type NameConfig } from "@/lib/activities/name";
 import { sanitizeText } from "@/lib/sanitize";
+import { imageIdSchema } from "@/lib/validation/images";
 
 /** LIVRE (perguntas livres) virou FOLHA: a migração 20261028120100 converte as atividades antigas. */
 export const SUPPORTED_MODULES = ["LOCALIZACAO", "GRAFIA", "MATEMATICA", "FOLHA", "NOME"] as const;
@@ -58,12 +59,19 @@ export type Stimulus =
   | { kind: "letter"; display: string }
   | { kind: "count"; a: number; b: number }
   /** Pergunta livre: apoio opcional (texto curto e/ou pictograma) escrito pelo professor. */
-  | { kind: "free"; text?: string; icon?: IconName };
+  | { kind: "free"; text?: string; icon?: IconName; image?: ImageRef };
+
+/** Imagem enviada pelo professor: o id e o texto alternativo (copiado na hora de escolher). */
+export interface ImageRef {
+  id: string;
+  alt: string;
+}
 
 export interface PlayOption {
   id: string;
   label: string;
   icon?: IconName;
+  image?: ImageRef;
 }
 
 export interface PlayItem {
@@ -91,6 +99,8 @@ export function isCorrectOption(item: PlayItem, optionId: string): boolean {
 const text = (max: number) => z.string().transform(sanitizeText).pipe(z.string().min(1).max(max));
 const slug = z.string().regex(/^[a-z0-9-]{1,40}$/);
 const icon = z.enum(ICON_NAMES);
+/** Só a referência: a imagem em si fica na tabela Image e é servida por /api/imagens/[id]. */
+const imageRef = z.object({ id: imageIdSchema, alt: text(120) }).strict();
 
 function itemShape<Id extends z.ZodType<string>>(id: Id) {
   return {
@@ -144,16 +154,18 @@ export type ExerciseType = (typeof EXERCISE_TYPES)[number];
 export interface SheetSupport {
   text?: string;
   icon?: IconName;
+  image?: ImageRef;
   example?: string;
 }
 
-const sheetOption = z.object({ id: slug, label: text(40), icon: icon.optional() }).strict();
+const sheetOption = z.object({ id: slug, label: text(40), icon: icon.optional(), image: imageRef.optional() }).strict();
 const exerciseBase = {
   key: slug,
   prompt: text(120),
   hint: text(120).optional(),
   support: text(MAX_SUPPORT_TEXT).optional(),
   supportIcon: icon.optional(),
+  supportImage: imageRef.optional(),
 };
 
 const sheetExercise = z.discriminatedUnion("type", [
@@ -219,7 +231,12 @@ function checkSheet({ items }: { items: SheetExercise[] }, ctx: z.RefinementCtx)
 const sheetContent = z
   .object({
     support: z
-      .object({ text: text(MAX_SHEET_TEXT).optional(), icon: icon.optional(), example: text(MAX_EXAMPLE_TEXT).optional() })
+      .object({
+        text: text(MAX_SHEET_TEXT).optional(),
+        icon: icon.optional(),
+        image: imageRef.optional(),
+        example: text(MAX_EXAMPLE_TEXT).optional(),
+      })
       .strict()
       .optional(),
     items: z.array(sheetExercise).min(1).max(MAX_SHEET_EXERCISES),
@@ -227,16 +244,18 @@ const sheetContent = z
   .strict()
   .superRefine(checkSheet);
 
-const freeStimulus = (support?: string, supportIcon?: IconName): Stimulus => ({
+const freeStimulus = (support?: string, supportIcon?: IconName, supportImage?: ImageRef): Stimulus => ({
   kind: "free",
   ...(support ? { text: support } : {}),
   ...(supportIcon ? { icon: supportIcon } : {}),
+  ...(supportImage ? { image: supportImage } : {}),
 });
 
-const playOption = (o: { id: string; label: string; icon?: IconName }): PlayOption => ({
+const playOption = (o: { id: string; label: string; icon?: IconName; image?: ImageRef }): PlayOption => ({
   id: o.id,
   label: o.label,
   ...(o.icon ? { icon: o.icon } : {}),
+  ...(o.image ? { image: o.image } : {}),
 });
 
 export const TRUE_FALSE_OPTIONS: PlayOption[] = [
@@ -257,7 +276,7 @@ function sheetPlayItems(items: SheetExercise[]): PlayItem[] {
         options: TRUE_FALSE_OPTIONS,
         correctId: s.correct ? "v" : "f",
         fixedOrder: true,
-        stimulus: freeStimulus(s.text, j === 0 ? ex.supportIcon : undefined),
+        stimulus: freeStimulus(s.text, j === 0 ? ex.supportIcon : undefined, j === 0 ? ex.supportImage : undefined),
         exercise: { ...exercise, part: { index: j + 1, total: ex.statements.length } },
       }));
     }
@@ -268,7 +287,7 @@ function sheetPlayItems(items: SheetExercise[]): PlayItem[] {
         options: ex.options.map(playOption),
         correctId: ex.type === "escolha" ? ex.correctId : ex.correctIds[0]!,
         ...(ex.type === "marcar" ? { correctIds: ex.correctIds } : {}),
-        stimulus: freeStimulus(ex.support, ex.supportIcon),
+        stimulus: freeStimulus(ex.support, ex.supportIcon, ex.supportImage),
         exercise,
       },
     ];

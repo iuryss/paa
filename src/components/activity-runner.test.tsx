@@ -436,6 +436,37 @@ describe("ActivityRunner — módulos", () => {
     ]);
   });
 
+  it("Folha com imagens: figura na leitura, no apoio e nas respostas (a palavra nunca some)", () => {
+    const bola = { id: "cimgbola1234567890abcdef", alt: "Bola de basquete" };
+    const r = parseActivityContent("FOLHA", {
+      support: { text: "Formas", image: { id: "cimgformas234567890abcde", alt: "Círculo, quadrado e triângulo" } },
+      items: [
+        {
+          type: "escolha",
+          key: "item-1",
+          prompt: "Qual objeto é redondo?",
+          supportImage: { id: "cimgcirc12345678901abcde", alt: "Um círculo" },
+          options: [
+            { id: "o-bola", label: "Bola", image: bola },
+            { id: "o-dado", label: "Dado" },
+          ],
+          correctId: "o-bola",
+        },
+      ],
+    });
+    if (!r.success) throw new Error("inválido");
+    render(
+      <AccessibilityProvider initial={DEFAULT_PREFERENCES}>
+        <ActivityRunner activityId="act-123456" title="Formas" items={r.items} sheet={r.sheet} onStart={jest.fn()} onRecord={jest.fn()} onFinish={jest.fn()} />
+      </AccessibilityProvider>,
+    );
+    expect(screen.getByRole("img", { name: "Círculo, quadrado e triângulo" })).toHaveAttribute("src", "/api/imagens/cimgformas234567890abcde");
+    expect(screen.getByRole("img", { name: "Um círculo" })).toBeInTheDocument();
+    const button = screen.getByRole("button", { name: /^Bola, / });
+    expect(button.querySelector("img")).toHaveAttribute("src", "/api/imagens/cimgbola1234567890abcdef");
+    expect(button).toHaveTextContent("Bola");
+  });
+
   it("Modo pictográfico: opções com pictograma + palavra", () => {
     const items = parse("LOCALIZACAO", {
       items: [

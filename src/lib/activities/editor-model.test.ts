@@ -160,9 +160,9 @@ describe("Folha", () => {
     supportText: "Na casa da Ana tem um bicho que faz au-au.",
     supportIcon: "casa",
     answers: [
-      { label: "Gato", icon: "gato" },
-      { label: "Cachorro", icon: "cachorro" },
-      { label: "Peixe", icon: "" },
+      { label: "Gato", icon: "gato", image: null },
+      { label: "Cachorro", icon: "cachorro", image: null },
+      { label: "Peixe", icon: "", image: null },
     ],
     correctIndex: 1,
     ...over,
@@ -171,9 +171,9 @@ describe("Folha", () => {
     ...emptyItem("FOLHA", "marcar"),
     prompt: "Marque os números naturais",
     answers: [
-      { label: "2", icon: "" },
-      { label: "-3", icon: "" },
-      { label: "0", icon: "" },
+      { label: "2", icon: "", image: null },
+      { label: "-3", icon: "", image: null },
+      { label: "0", icon: "", image: null },
     ],
     correctSet: [0, 2],
     ...over,
@@ -187,7 +187,7 @@ describe("Folha", () => {
     ],
     ...over,
   });
-  const sheet = { text: "A **matéria** ocupa espaço.", icon: "agua" as const, example: "Ex.: a pedra é matéria." };
+  const sheet = { text: "A **matéria** ocupa espaço.", icon: "agua" as const, image: null, example: "Ex.: a pedra é matéria." };
 
   it("começa pelo tipo pedido: escolha (2 respostas), marcar (3, a 1ª certa) e V/F (2 frases)", () => {
     expect(emptyItem("FOLHA")).toMatchObject({ exType: "escolha", answers: [{ label: "" }, { label: "" }], correctIndex: 0 });
@@ -234,7 +234,7 @@ describe("Folha", () => {
 
   it("valida respostas, frases, marcar todas e o bloco de apoio", () => {
     expect(validateItems("FOLHA", [escolha(), marcar(), vf()])).toEqual([]);
-    const twins = escolha({ answers: [{ label: "Gato", icon: "" }, { label: "gato", icon: "" }], correctIndex: 0 });
+    const twins = escolha({ answers: [{ label: "Gato", icon: "", image: null }, { label: "gato", icon: "", image: null }], correctIndex: 0 });
     expect(validateItems("FOLHA", [twins])).toContain("Exercício 1: há respostas repetidas.");
     expect(validateItems("FOLHA", [marcar({ correctSet: [0, 1, 2] })])).toContain(
       "Exercício 1: deixe pelo menos uma resposta que não vale (senão não há o que escolher).",
@@ -299,5 +299,51 @@ describe("Escrever o nome", () => {
     expect(contentSchemas.NOME.safeParse({ items: [{ ...ok.items[0], extraLetters: 7 }] }).success).toBe(false);
     expect(contentSchemas.NOME.safeParse({ items: [{ ...ok.items[0], key: "outro" }] }).success).toBe(false);
     expect(contentSchemas.NOME.safeParse({ items: [ok.items[0], ok.items[0]] }).success).toBe(false);
+  });
+});
+
+describe("Folha com imagens do professor", () => {
+  const bola = { id: "cimgbola1234567890abcdef", alt: "Bola de basquete" };
+  const cubo = { id: "cimgcubo1234567890abcdef", alt: " Cubo mágico " };
+  const item: EditorItem = {
+    ...emptyItem("FOLHA", "escolha"),
+    prompt: "Qual é redondo?",
+    supportImage: cubo,
+    answers: [
+      { label: "Bola", icon: "", image: bola },
+      { label: "Cubo", icon: "", image: null },
+    ],
+  };
+  const sheet = { text: "", icon: "" as const, image: bola, example: "" };
+
+  it("leva a imagem da leitura, do exercício e da resposta para o conteúdo (descrição sem espaços sobrando)", () => {
+    const content = toContent("FOLHA", [item], sheet) as { support: unknown; items: Record<string, unknown>[] };
+    expect(contentSchemas.FOLHA.safeParse(content).success).toBe(true);
+    expect(content.support).toEqual({ image: bola });
+    expect(content.items[0]).toMatchObject({
+      supportImage: { id: cubo.id, alt: "Cubo mágico" },
+      options: [{ label: "Bola", image: bola }, { label: "Cubo" }],
+    });
+    expect((content.items[0]!.options as Record<string, unknown>[])[1]).not.toHaveProperty("image");
+    const r = parseActivityContent("FOLHA", content);
+    expect(r.success && r.items[0]).toMatchObject({ stimulus: { image: { id: cubo.id } }, options: [{ image: bola }, {}] });
+  });
+
+  it("ida e volta preserva as imagens", () => {
+    const content = toContent("FOLHA", [item], sheet);
+    expect(fromContent("FOLHA", content)[0]).toMatchObject({ supportImage: { id: cubo.id }, answers: [{ image: bola }, { image: null }] });
+    expect(sheetFromContent(content).image).toEqual(bola);
+  });
+
+  it("toda imagem precisa de descrição (leitor de tela)", () => {
+    expect(validateItems("FOLHA", [{ ...item, supportImage: { id: cubo.id, alt: " " } }])).toContain(
+      "Exercício 1: descreva cada imagem (para quem não enxerga).",
+    );
+    expect(validateSheet({ ...sheet, image: { id: bola.id, alt: "" } })).toContain("Descreva a imagem da leitura (para quem não enxerga).");
+  });
+
+  it("o schema recusa id de imagem que não é do nosso formato (ex.: link externo)", () => {
+    const content = toContent("FOLHA", [item], { ...sheet, image: { id: "https://exemplo.test/x.png", alt: "x" } });
+    expect(contentSchemas.FOLHA.safeParse(content).success).toBe(false);
   });
 });

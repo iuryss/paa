@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useId } from "react";
 import { Pictogram } from "@/components/pictogram";
+import { UploadedImage } from "@/components/uploaded-image";
 import { ICON_LABEL } from "@/lib/activities/editor-model";
 import type { SheetSupport } from "@/lib/validation/activities";
 
@@ -25,7 +26,7 @@ export function withHighlights(text: string): ReactNode[] {
 /** Bloco de apoio no topo da folha: leitura, figura e exemplo resolvido. Fica visível em todos os exercícios. */
 export function SheetSupportBlock({ sheet }: { sheet: SheetSupport }) {
   const uid = useId();
-  if (!sheet.text && !sheet.icon && !sheet.example) return null;
+  if (!sheet.text && !sheet.icon && !sheet.image && !sheet.example) return null;
   return (
     <section
       aria-labelledby={`${uid}-leia`}
@@ -34,6 +35,7 @@ export function SheetSupportBlock({ sheet }: { sheet: SheetSupport }) {
       <h2 id={`${uid}-leia`} className="text-subtitle">
         Leia
       </h2>
+      {sheet.image ? <UploadedImage image={sheet.image} className="max-h-72 self-center" /> : null}
       <div className="flex flex-col items-start gap-6 sm:flex-row">
         {sheet.icon ? (
           <span role="img" aria-label={ICON_LABEL[sheet.icon]} className="block size-20 shrink-0 text-ink">

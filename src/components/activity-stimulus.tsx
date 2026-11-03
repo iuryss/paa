@@ -4,7 +4,8 @@ import { User } from "lucide-react";
 import { AdaptiveLabel } from "@/components/adaptive-label";
 import { Pictogram } from "@/components/pictogram";
 import { ICON_LABEL } from "@/lib/activities/editor-model";
-import type { Direction, IconName, Stimulus } from "@/lib/validation/activities";
+import { UploadedImage } from "@/components/uploaded-image";
+import type { Direction, IconName, ImageRef, Stimulus } from "@/lib/validation/activities";
 
 const CELL = "flex size-28 items-center justify-center rounded-[12px] border-2 p-2 text-center sm:size-32";
 
@@ -88,10 +89,11 @@ function CountStimulus({ a, b }: { a: number; b: number }) {
 }
 
 /** Apoio da pergunta livre: figura grande (com nome para o leitor de tela) e texto curto à esquerda. */
-function FreeStimulus({ text, icon }: { text?: string; icon?: IconName }) {
-  if (!text && !icon) return null;
+function FreeStimulus({ text, icon, image }: { text?: string; icon?: IconName; image?: ImageRef }) {
+  if (!text && !icon && !image) return null;
   return (
     <div className="flex w-full flex-col items-center gap-6">
+      {image ? <UploadedImage image={image} className="max-h-64" /> : null}
       {icon ? (
         <span role="img" aria-label={ICON_LABEL[icon]} className="block size-28 text-ink">
           <Pictogram name={icon} />
@@ -120,6 +122,6 @@ export function ActivityStimulus({ stimulus }: { stimulus: Stimulus }) {
     case "count":
       return <CountStimulus a={stimulus.a} b={stimulus.b} />;
     case "free":
-      return <FreeStimulus text={stimulus.text} icon={stimulus.icon} />;
+      return <FreeStimulus text={stimulus.text} icon={stimulus.icon} image={stimulus.image} />;
   }
 }
