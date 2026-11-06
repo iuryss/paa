@@ -312,6 +312,48 @@ describe("ActivityEditor — itens", () => {
     });
   }, 20_000); // muita digitação simulada
 
+  it("Folha: monta colocar em ordem, nomear imagens e separar em grupos, e salva no formato certo", async () => {
+    reply(201, { id: "folha77777" });
+    const user = userEvent.setup();
+    setup("FOLHA", {
+      initial: { title: "", instruction: "", difficulty: "INICIAL", published: false, items: [emptyItem("FOLHA", "ordenar")] },
+    });
+    await fillMeta(user);
+
+    const ex1 = within(screen.getByRole("group", { name: "Exercício 1" }));
+    await user.click(ex1.getByRole("radio", { name: "Passos (um por linha)" }));
+    await user.type(ex1.getByLabelText("Escreva na ordem certa"), "Acordar{Enter}Comer");
+    expect(ex1.getByText("Peças (2): Acordar · Comer")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Nomear imagens" }));
+    const ex2 = within(screen.getByRole("group", { name: "Exercício 2" }));
+    await user.selectOptions(ex2.getByLabelText("Ícone da figura 1"), "gato");
+    await user.type(ex2.getByLabelText("Nome certo da figura 1"), "Gato");
+    await user.selectOptions(ex2.getByLabelText("Ícone da figura 2"), "sol");
+    await user.type(ex2.getByLabelText("Nome certo da figura 2"), "Sol");
+
+    await user.click(screen.getByRole("button", { name: "Separar em grupos" }));
+    const ex3 = within(screen.getByRole("group", { name: "Exercício 3" }));
+    await user.type(ex3.getByLabelText("Nome da caixa 1"), "Físico");
+    await user.type(ex3.getByLabelText("Nome da caixa 2"), "Químico");
+    await user.type(ex3.getByLabelText("Texto do cartão 1"), "Gelo");
+    await user.type(ex3.getByLabelText("Texto do cartão 2"), "Ferrugem");
+    // A lista de caixas do cartão mostra os nomes que o professor acabou de escrever.
+    expect(within(ex3.getByLabelText("Caixa certa do cartão 2")).getByRole("option", { name: "Químico" })).toBeInTheDocument();
+    expect(ex3.getByLabelText("Caixa certa do cartão 2")).toHaveValue("1");
+
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const items = JSON.parse(fetchMock.mock.calls[0]![1].body).content.items;
+    expect(items[0]).toMatchObject({ type: "ordenar", order: "passos", pieces: ["Acordar", "Comer"] });
+    expect(items[1]).toMatchObject({ type: "nomear", figures: [{ icon: "gato", answer: "Gato" }, { icon: "sol", answer: "Sol" }] });
+    expect(items[2]).toMatchObject({
+      type: "classificar",
+      groups: [{ id: "g1", label: "Físico" }, { id: "g2", label: "Químico" }],
+      cards: [{ id: "c1", label: "Gelo", group: "g1" }, { id: "c2", label: "Ferrugem", group: "g2" }],
+    });
+  }, 20_000); // muita digitação simulada
+
   it("Folha: resposta vazia e destaque aberto são apontados antes de salvar", async () => {
     const user = userEvent.setup();
     setup("FOLHA", {

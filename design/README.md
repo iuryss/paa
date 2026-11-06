@@ -170,6 +170,9 @@ Imita a página do caderno adaptado: **leitura no topo, exercícios embaixo**.
 - Mesmo padrão do "escrever o nome": **um alvo por vez** (a lacuna/o item da vez com borda tracejada `drop-active-*`), peças tocáveis, arrastáveis (depois de 8 px) e com Enter.
 - **Lacunas** ficam dentro do texto (`min-w-[6ch]`, altura 48px, `text-leitura`); a palavra usada deixa o lugar invisível no banco, para as outras não mudarem de posição.
 - **Ligar pares**: duas colunas com 48px entre elas; os pares certos ficam `success-*`, com ✓, e uma linha `stroke-success-border` de 4px liga os dois. A linha é decorativa: o leitor de tela ouve "Bola: ligado com Círculo".
+- **Colocar em ordem**: letras em casas de 64px lado a lado, palavras formando a frase, passos em lista numerada; a próxima posição fica destacada.
+- **Nomear imagens**: cada figura com a sua casa embaixo (grade de 2 ou 3 colunas); a figura da vez tem a casa destacada.
+- **Separar em grupos**: o cartão da vez em cima (borda tracejada `drop-active-*`, "Cartão 2 de 4") e as caixas **sempre no mesmo lugar** embaixo; cada caixa é botão e alvo de soltar, e mostra os cartões já guardados com ✓.
 - Escada de dicas: a dica escrita do professor (se houver) e depois a peça certa em destaque. Sem dica escrita, o destaque vem direto.
 
 ## Imagens do professor

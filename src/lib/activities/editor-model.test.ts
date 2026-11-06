@@ -1,12 +1,17 @@
 import { contentSchemas, parseActivityContent } from "@/lib/validation/activities";
 import {
   addAnswer,
+  addCard,
+  addFigure,
+  addGroup,
   addPair,
   addStatement,
   emptyItem,
   fromContent,
   move,
+  orderPieces,
   removeAnswer,
+  removeGroup,
   sheetFromContent,
   toContent,
   toggleCorrect,
@@ -402,5 +407,89 @@ describe("Folha: completar lacunas e ligar pares", () => {
     let item = ligar;
     for (let i = 0; i < 5; i++) item = addPair(item);
     expect(item.pairs).toHaveLength(5);
+  });
+});
+
+describe("Folha: colocar em ordem, nomear imagens e separar em grupos", () => {
+  it("orderPieces separa conforme o modo", () => {
+    expect(orderPieces("letras", "Á g u a")).toEqual(["Á", "g", "u", "a"]);
+    expect(orderPieces("palavras", " O gelo  é sólido ")).toEqual(["O", "gelo", "é", "sólido"]);
+    expect(orderPieces("passos", "Acordar\n\n  Comer \n")).toEqual(["Acordar", "Comer"]);
+  });
+
+  it("ordenar: ida e volta preserva o texto em cada modo", () => {
+    for (const [mode, text] of [["letras", "agua"], ["palavras", "O gelo é sólido"], ["passos", "Acordar\nComer"]] as const) {
+      const content = toContent("FOLHA", [{ ...emptyItem("FOLHA", "ordenar"), orderMode: mode, orderText: text }]);
+      expect(contentSchemas.FOLHA.safeParse(content).success).toBe(true);
+      expect(fromContent("FOLHA", content)[0]).toMatchObject({ exType: "ordenar", orderMode: mode, orderText: text });
+    }
+  });
+
+  it("nomear: figuras, respostas e extras; exige figura e nome", () => {
+    const item: EditorItem = {
+      ...emptyItem("FOLHA", "nomear"),
+      figures: [
+        { icon: "gato", image: null, answer: "Gato" },
+        { icon: "sol", image: null, answer: "Sol" },
+      ],
+      extras: ["Lua"],
+    };
+    const content = toContent("FOLHA", [item]);
+    expect(contentSchemas.FOLHA.safeParse(content).success).toBe(true);
+    expect(fromContent("FOLHA", content)[0]).toMatchObject({ figures: item.figures, extras: ["Lua"] });
+    expect(validateItems("FOLHA", [item])).toEqual([]);
+    const errors = validateItems("FOLHA", [{ ...item, figures: [item.figures[0]!, { icon: "", image: null, answer: "" }] }]);
+    expect(errors).toContain("Exercício 1: escolha a figura ou imagem 2.");
+    expect(errors).toContain("Exercício 1: escreva o nome da figura 2.");
+    expect(validateItems("FOLHA", [{ ...item, extras: ["gato"] }])).toContain("Exercício 1: há palavras repetidas.");
+  });
+
+  it("classificar: ida e volta guarda a caixa de cada cartão; toda caixa precisa de cartão", () => {
+    const item: EditorItem = {
+      ...emptyItem("FOLHA", "classificar"),
+      groups: [
+        { label: "Físico", icon: "", image: null },
+        { label: "Químico", icon: "", image: null },
+      ],
+      cards: [
+        { label: "Gelo", icon: "", image: null, group: 0 },
+        { label: "Ferrugem", icon: "", image: null, group: 1 },
+      ],
+    };
+    const content = toContent("FOLHA", [item]);
+    expect(contentSchemas.FOLHA.safeParse(content).success).toBe(true);
+    expect(content.items[0]).toMatchObject({ cards: [{ id: "c1", group: "g1" }, { id: "c2", group: "g2" }] });
+    expect(fromContent("FOLHA", content)[0]).toMatchObject({ groups: item.groups, cards: item.cards });
+    expect(validateItems("FOLHA", [item])).toEqual([]);
+    expect(validateItems("FOLHA", [{ ...item, cards: item.cards.map((c) => ({ ...c, group: 0 })) }])).toContain(
+      "Exercício 1: a caixa 2 não tem nenhum cartão.",
+    );
+  });
+
+  it("removeGroup move os cartões da caixa removida e ajusta os índices; limites de caixas, cartões e figuras", () => {
+    const item: EditorItem = {
+      ...emptyItem("FOLHA", "classificar"),
+      groups: [
+        { label: "A", icon: "", image: null },
+        { label: "B", icon: "", image: null },
+        { label: "C", icon: "", image: null },
+      ],
+      cards: [
+        { label: "1", icon: "", image: null, group: 1 },
+        { label: "2", icon: "", image: null, group: 2 },
+      ],
+    };
+    const removed = removeGroup(item, 1);
+    expect(removed.groups.map((g) => g.label)).toEqual(["A", "C"]);
+    expect(removed.cards.map((c) => c.group)).toEqual([0, 1]);
+
+    let many = item;
+    for (let i = 0; i < 5; i++) many = addGroup(many);
+    expect(many.groups).toHaveLength(4);
+    for (let i = 0; i < 12; i++) many = addCard(many);
+    expect(many.cards).toHaveLength(10);
+    let figures = emptyItem("FOLHA", "nomear");
+    for (let i = 0; i < 8; i++) figures = addFigure(figures);
+    expect(figures.figures).toHaveLength(6);
   });
 });

@@ -2,7 +2,8 @@ import { maxHelp, type AttemptRecord, type HelpLevel } from "@/lib/activities/ru
 
 /**
  * Motor de ENCAIXAR (peça → casa), comum a todas as atividades de pôr peças no lugar:
- * escrever o nome (letra → casa), completar lacunas (palavra → lacuna), ligar pares (par → item).
+ * escrever o nome (letra → casa), completar lacunas (palavra → lacuna), ligar pares (par → item),
+ * ordenar (peça → posição), nomear imagens (palavra → figura) e classificar (caixa → cartão da vez).
  *
  * As casas se preenchem em ordem, uma por vez (sempre há uma única "próxima casa"), o que deixa
  * tocar, teclado e arrastar com o mesmo comportamento. A peça vale se o seu `value` for o que a casa
@@ -32,6 +33,8 @@ export interface PlaceBoard {
   canTell: boolean;
   /** Mostrar o modelo desde o início (ex.: o nome escrito). */
   showModel?: boolean;
+  /** Classificar: a mesma peça (a caixa) serve para várias casas (os cartões). */
+  reusableTiles?: boolean;
 }
 
 export const REDIRECTS_BEFORE_TELL = 2;
@@ -77,7 +80,7 @@ export const expectedValue = (board: PlaceBoard, state: PlaceState): string | un
 /** A peça que o destaque aponta: a primeira ainda livre com o valor da casa atual. */
 export function hintedTile(board: PlaceBoard, state: PlaceState): PlaceTile | undefined {
   const value = expectedValue(board, state);
-  return board.tiles.find((t) => t.value === value && !state.placed.includes(t.id));
+  return board.tiles.find((t) => t.value === value && (board.reusableTiles || !state.placed.includes(t.id)));
 }
 
 /** Coloca uma peça na casa atual. A ajuda registrada é a que a criança JÁ tinha à vista. */
@@ -89,7 +92,8 @@ export function placeOnBoard(
 ): { state: PlaceState; attempt: AttemptRecord | null } {
   const tile = board.tiles.find((t) => t.id === tileId);
   const slot = board.slots[state.slot];
-  if (state.status === "done" || !tile || !slot || state.placed.includes(tileId)) return { state, attempt: null };
+  const used = !board.reusableTiles && state.placed.includes(tileId);
+  if (state.status === "done" || !tile || !slot || used) return { state, attempt: null };
 
   const correct = tile.value === slot.expected;
   const attempt: AttemptRecord = {
