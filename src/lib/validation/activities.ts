@@ -86,12 +86,52 @@ export interface PlayItem {
   fixedOrder?: boolean;
   /** Folha: em qual exercício a criança está (e em qual frase, no V/F). */
   exercise?: { index: number; total: number; part?: { index: number; total: number } };
+  /** Encaixar (lacunas, ligar pares): casas em ordem + peças. Sem opções de escolha. */
+  place?: PlacePlay;
   stimulus: Stimulus;
 }
 
 /** A regra de "certo" de um passo, a mesma no navegador e no servidor. */
 export function isCorrectOption(item: PlayItem, optionId: string): boolean {
   return item.correctIds ? item.correctIds.includes(optionId) : optionId === item.correctId;
+}
+
+/** Algo que vira peça ou item de coluna: texto sempre, figura e imagem opcionais. */
+export interface PlaceCard {
+  label: string;
+  icon?: IconName;
+  image?: ImageRef;
+}
+
+export interface PlacePlay {
+  mode: "lacunas" | "ligar";
+  /** Uma casa por lacuna (ou por item da esquerda), na ordem em que são preenchidas. */
+  slots: { key: string; expected: string }[];
+  /** As peças: palavras do banco (lacunas) ou os itens da direita (ligar). */
+  tiles: (PlaceCard & { id: string; value: string })[];
+  /** Lacunas: o texto em pedaços; null marca uma lacuna (na ordem das casas). */
+  segments?: (string | null)[];
+  /** Ligar: os itens da esquerda, na ordem das casas. */
+  left?: PlaceCard[];
+}
+
+/**
+ * Confere uma tentativa no servidor: escolha (opção certa) ou encaixe (a peça vale o que a casa espera).
+ * null = tentativa inválida (casa ou peça que não existem nesta atividade).
+ */
+export function judgeAttempt(items: PlayItem[], itemKey: string, optionId: string): boolean | null {
+  for (const item of items) {
+    if (item.place) {
+      const slot = item.place.slots.find((sl) => sl.key === itemKey);
+      if (!slot) continue;
+      const tile = item.place.tiles.find((t) => t.id === optionId);
+      return tile ? tile.value === slot.expected : null;
+    }
+    if (item.key === itemKey) {
+      return item.options.some((o) => o.id === optionId) ? isCorrectOption(item, optionId) : null;
+    }
+  }
+  return null;
 }
 
 // ───────────── Schemas de conteúdo (validação + sanitização) ─────────────
@@ -147,7 +187,32 @@ export const MAX_SHEET_TEXT = 800;
 export const MAX_EXAMPLE_TEXT = 300;
 export const MAX_SHEET_EXERCISES = 12;
 export const MAX_STATEMENTS = 6;
-export const EXERCISE_TYPES = ["escolha", "marcar", "vf"] as const;
+export const EXERCISE_TYPES = ["escolha", "marcar", "vf", "lacunas", "ligar"] as const;
+export const MAX_GAPS = 8;
+export const MAX_EXTRA_WORDS = 6;
+export const MIN_PAIRS = 2;
+export const MAX_PAIRS = 5;
+
+/** "A matéria tem [massa] e [volume]." → pedaços do texto e as palavras escondidas. */
+export function parseGaps(textWithGaps: string): { segments: (string | null)[]; answers: string[] } {
+  const segments: (string | null)[] = [];
+  const answers: string[] = [];
+  let last = 0;
+  for (const match of textWithGaps.matchAll(/\[([^\[\]]+)\]/g)) {
+    if (match.index! > last) segments.push(textWithGaps.slice(last, match.index));
+    segments.push(null);
+    answers.push(match[1]!.trim());
+    last = match.index! + match[0].length;
+  }
+  if (last < textWithGaps.length) segments.push(textWithGaps.slice(last));
+  return { segments, answers };
+}
+
+/** Comparação de palavras do banco: ignora maiúsculas e espaços nas pontas (acento conta). */
+export const wordValue = (word: string) => word.trim().toLocaleLowerCase("pt-BR");
+/** Chave de telemetria de cada lacuna e de cada par: "item-2-l1", "item-3-p1". */
+export const gapKey = (exerciseKey: string, index: number) => `${exerciseKey}-l${index + 1}`;
+export const pairKey = (exerciseKey: string, pairId: string) => `${exerciseKey}-${pairId}`;
 export type ExerciseType = (typeof EXERCISE_TYPES)[number];
 
 /** Bloco de apoio no topo da folha. `**palavra**` no texto vira destaque. */
@@ -167,6 +232,8 @@ const exerciseBase = {
   supportIcon: icon.optional(),
   supportImage: imageRef.optional(),
 };
+
+const pairSide = z.object({ label: text(40), icon: icon.optional(), image: imageRef.optional() }).strict();
 
 const sheetExercise = z.discriminatedUnion("type", [
   z.object({ type: z.literal("escolha"), ...exerciseBase, options: z.array(sheetOption).min(2).max(4), correctId: slug }).strict(),
@@ -190,6 +257,26 @@ const sheetExercise = z.discriminatedUnion("type", [
         .max(MAX_STATEMENTS),
     })
     .strict(),
+  /** Completar lacunas: palavras entre [colchetes] somem e vão para o banco, com as extras. */
+  z
+    .object({
+      type: z.literal("lacunas"),
+      ...exerciseBase,
+      text: text(400),
+      extras: z.array(text(30)).max(MAX_EXTRA_WORDS).default([]),
+    })
+    .strict(),
+  /** Ligar pares (um para um): cada item da esquerda com o seu par da direita. */
+  z
+    .object({
+      type: z.literal("ligar"),
+      ...exerciseBase,
+      pairs: z
+        .array(z.object({ id: slug, left: pairSide, right: pairSide }).strict())
+        .min(MIN_PAIRS)
+        .max(MAX_PAIRS),
+    })
+    .strict(),
 ]);
 type SheetExercise = z.infer<typeof sheetExercise>;
 
@@ -210,6 +297,29 @@ function checkSheet({ items }: { items: SheetExercise[] }, ctx: z.RefinementCtx)
         ctx.addIssue({ code: "custom", path: ["items", i, "statements"], message: "Frases repetidas." });
       }
       ids.forEach((id) => addKey(statementKey(item.key, id), i));
+      return;
+    }
+    if (item.type === "lacunas") {
+      const { answers } = parseGaps(item.text);
+      if (answers.length < 1 || answers.length > MAX_GAPS || answers.some((a) => !a || a.length > 30)) {
+        ctx.addIssue({ code: "custom", path: ["items", i, "text"], message: `Use de 1 a ${MAX_GAPS} palavras entre [colchetes].` });
+      }
+      const hidden = new Set(answers.map(wordValue));
+      // Uma "extra" igual a uma escondida seria outra resposta certa: confunde.
+      if (item.extras.some((w) => hidden.has(wordValue(w))) || new Set(item.extras.map(wordValue)).size !== item.extras.length) {
+        ctx.addIssue({ code: "custom", path: ["items", i, "extras"], message: "Palavras extras repetidas ou iguais a uma resposta." });
+      }
+      answers.forEach((_, g) => addKey(gapKey(item.key, g), i));
+      return;
+    }
+    if (item.type === "ligar") {
+      const ids = item.pairs.map((pr) => pr.id);
+      const lefts = item.pairs.map((pr) => wordValue(pr.left.label));
+      const rights = item.pairs.map((pr) => wordValue(pr.right.label));
+      if (new Set(ids).size !== ids.length || new Set(lefts).size !== lefts.length || new Set(rights).size !== rights.length) {
+        ctx.addIssue({ code: "custom", path: ["items", i, "pairs"], message: "Pares repetidos." });
+      }
+      ids.forEach((id) => addKey(pairKey(item.key, id), i));
       return;
     }
     const ids = item.options.map((o) => o.id);
@@ -258,6 +368,12 @@ const playOption = (o: { id: string; label: string; icon?: IconName; image?: Ima
   ...(o.image ? { image: o.image } : {}),
 });
 
+const card = (c: { label: string; icon?: IconName; image?: ImageRef }): PlaceCard => ({
+  label: c.label,
+  ...(c.icon ? { icon: c.icon } : {}),
+  ...(c.image ? { image: c.image } : {}),
+});
+
 export const TRUE_FALSE_OPTIONS: PlayOption[] = [
   { id: "v", label: "Verdadeiro" },
   { id: "f", label: "Falso" },
@@ -269,6 +385,45 @@ function sheetPlayItems(items: SheetExercise[]): PlayItem[] {
   return items.flatMap((ex, i): PlayItem[] => {
     const base = { prompt: ex.prompt, ...(ex.hint ? { hint: ex.hint } : {}) };
     const exercise = { index: i + 1, total };
+    if (ex.type === "lacunas") {
+      const { segments, answers } = parseGaps(ex.text);
+      const words = [...answers, ...ex.extras];
+      return [
+        {
+          ...base,
+          key: ex.key,
+          options: [],
+          correctId: "",
+          stimulus: freeStimulus(ex.support, ex.supportIcon, ex.supportImage),
+          exercise,
+          place: {
+            mode: "lacunas",
+            slots: answers.map((a, g) => ({ key: gapKey(ex.key, g), expected: wordValue(a) })),
+            // Ids pela ordem do conteúdo (respostas, depois extras): o servidor sabe qual palavra é cada peça.
+            tiles: words.map((w, n) => ({ id: `w${n + 1}`, value: wordValue(w), label: w })),
+            segments,
+          },
+        },
+      ];
+    }
+    if (ex.type === "ligar") {
+      return [
+        {
+          ...base,
+          key: ex.key,
+          options: [],
+          correctId: "",
+          stimulus: freeStimulus(ex.support, ex.supportIcon, ex.supportImage),
+          exercise,
+          place: {
+            mode: "ligar",
+            slots: ex.pairs.map((pr) => ({ key: pairKey(ex.key, pr.id), expected: pr.id })),
+            tiles: ex.pairs.map((pr) => ({ id: pr.id, value: pr.id, ...card(pr.right) })),
+            left: ex.pairs.map((pr) => card(pr.left)),
+          },
+        },
+      ];
+    }
     if (ex.type === "vf") {
       return ex.statements.map((s, j) => ({
         ...base,

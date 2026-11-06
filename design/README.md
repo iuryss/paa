@@ -165,6 +165,13 @@ Imita a página do caderno adaptado: **leitura no topo, exercícios embaixo**.
 - **Marcar todas as certas**: a linha "Marque todas as certas: 1 de 2." fica embaixo da pergunta. Cada toque é conferido na hora: a certa fica com borda de acerto e `aria-pressed="true"`, e o feedback diz "Você achou: Pedra. Falta 1."; a que não vale é "Quase!" e não desmarca as já encontradas. A dica aponta a próxima certa ainda não marcada.
 - **Verdadeiro ou falso**: duas opções fixas, Verdadeiro sempre antes de Falso (nunca embaralhar), com os marcadores das posições 1 e 2.
 
+## Encaixar na folha (lacunas e ligar pares)
+
+- Mesmo padrão do "escrever o nome": **um alvo por vez** (a lacuna/o item da vez com borda tracejada `drop-active-*`), peças tocáveis, arrastáveis (depois de 8 px) e com Enter.
+- **Lacunas** ficam dentro do texto (`min-w-[6ch]`, altura 48px, `text-leitura`); a palavra usada deixa o lugar invisível no banco, para as outras não mudarem de posição.
+- **Ligar pares**: duas colunas com 48px entre elas; os pares certos ficam `success-*`, com ✓, e uma linha `stroke-success-border` de 4px liga os dois. A linha é decorativa: o leitor de tela ouve "Bola: ligado com Círculo".
+- Escada de dicas: a dica escrita do professor (se houver) e depois a peça certa em destaque. Sem dica escrita, o destaque vem direto.
+
 ## Imagens do professor
 
 - Componente `UploadedImage`: `object-contain`, borda `border-subtle`, cantos 12px, nunca maior que o espaço (leitura até `max-h-72`, apoio `max-h-64`, resposta `max-h-24`). Carregamento preguiçoso; nada se mexe (imagens animadas são recusadas no envio).

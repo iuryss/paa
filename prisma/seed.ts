@@ -181,6 +181,48 @@ async function main() {
     });
   }
 
+  // Folha de encaixar (sem sessões, para ficar editável): completar lacunas e ligar pares.
+  const encaixar = {
+    id: "seed-encaixar",
+    module: "FOLHA" as const,
+    title: "Formas e água",
+    instruction: "Encaixe as palavras e ligue os pares",
+    content: {
+      support: { text: "A **água** pode ser sólida (gelo), líquida ou gasosa (vapor).", icon: "agua" },
+      items: [
+        {
+          type: "lacunas",
+          key: "item-1",
+          prompt: "Complete com as palavras",
+          hint: "Leia o texto de cima.",
+          text: "O [gelo] é água sólida. O [vapor] é água gasosa.",
+          extras: ["fogo"],
+        },
+        {
+          type: "ligar",
+          key: "item-2",
+          prompt: "Ligue cada objeto à sua forma",
+          hint: "A bola é redonda.",
+          pairs: [
+            { id: "p1", left: { label: "Bola de basquete" }, right: { label: "Círculo", icon: "circulo" } },
+            { id: "p2", left: { label: "Telhado da casa" }, right: { label: "Triângulo" } },
+            { id: "p3", left: { label: "Cubo mágico" }, right: { label: "Quadrado" } },
+          ],
+        },
+      ],
+    },
+  };
+  await prisma.activity.upsert({
+    where: { id: encaixar.id },
+    update: { content: encaixar.content, title: encaixar.title, instruction: encaixar.instruction, published: true },
+    create: { ...encaixar, published: true, authorId: teacher.id },
+  });
+  await prisma.assignment.upsert({
+    where: { activityId_studentId: { activityId: encaixar.id, studentId: student.id } },
+    update: {},
+    create: { activityId: encaixar.id, studentId: student.id, assignedBy: teacher.id },
+  });
+
   // Escrever o nome: só a configuração; as letras vêm do apelido de cada aluno ("Sol").
   const nome = {
     id: "seed-nome",
@@ -242,7 +284,7 @@ async function main() {
     });
   }
 
-  console.log("Seed concluído (professor, aluno, 5 atividades e 8 sessões de demonstração).");
+  console.log("Seed concluído (professor, aluno, 6 atividades e 8 sessões de demonstração).");
 }
 
 main()

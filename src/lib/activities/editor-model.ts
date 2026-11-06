@@ -4,7 +4,12 @@ import {
   DIRECTIONS,
   ICON_NAMES,
   MAX_EXAMPLE_TEXT,
+  MAX_GAPS,
+  MAX_PAIRS,
   MAX_SHEET_EXERCISES,
+  MIN_PAIRS,
+  parseGaps,
+  wordValue,
   MAX_SHEET_TEXT,
   MAX_STATEMENTS,
   MAX_SUPPORT_TEXT,
@@ -41,7 +46,15 @@ export const EXERCISE_LABEL: Record<ExerciseType, string> = {
   escolha: "Escolher a resposta certa",
   marcar: "Marcar todas as certas",
   vf: "Verdadeiro ou falso",
+  lacunas: "Completar lacunas",
+  ligar: "Ligar pares",
 };
+
+/** Ligar pares: o item da esquerda e o seu par da direita (texto, figura e imagem, como as respostas). */
+export interface EditorPair {
+  left: EditorAnswer;
+  right: EditorAnswer;
+}
 
 /**
  * Modelo do editor do professor: um formulário guiado (nunca JSON cru).
@@ -69,6 +82,11 @@ export interface EditorItem {
   correctSet: number[];
   /** Verdadeiro ou falso: as frases. */
   statements: EditorStatement[];
+  /** Completar lacunas: a frase com as palavras escondidas entre [colchetes], e as palavras extras. */
+  gapText: string;
+  extras: string[];
+  /** Ligar pares: de 2 a 5. */
+  pairs: EditorPair[];
   prompt: string;
   hint: string;
   /** Grafia e Matemática: de 1 a 3 opções erradas. */
@@ -141,6 +159,12 @@ export const MAX_ITEMS = 20;
 
 const emptyAnswer = (): EditorAnswer => ({ label: "", icon: "", image: null });
 const emptyStatement = (): EditorStatement => ({ text: "", correct: true });
+const emptyPair = (): EditorPair => ({ left: emptyAnswer(), right: emptyAnswer() });
+
+export function addPair(item: EditorItem): EditorItem {
+  if (item.pairs.length >= MAX_PAIRS) return item;
+  return { ...item, pairs: [...item.pairs, emptyPair()] };
+}
 
 export function emptyItem(module: SupportedModule, exType: ExerciseType = "escolha"): EditorItem {
   const base: EditorItem = {
@@ -155,6 +179,9 @@ export function emptyItem(module: SupportedModule, exType: ExerciseType = "escol
     correctIndex: 0,
     correctSet: [],
     statements: [],
+    gapText: "",
+    extras: [],
+    pairs: [],
     prompt: "",
     hint: "",
     distractors: [],
@@ -170,6 +197,8 @@ export function emptyItem(module: SupportedModule, exType: ExerciseType = "escol
   if (module === "NOME") return { ...base, prompt: "Escreva seu nome" };
   if (module === "FOLHA") {
     if (exType === "vf") return { ...base, prompt: "É verdadeiro ou falso?", statements: [emptyStatement(), emptyStatement()] };
+    if (exType === "lacunas") return { ...base, prompt: "Complete com as palavras", extras: [""] };
+    if (exType === "ligar") return { ...base, prompt: "Ligue cada um ao seu par", pairs: [emptyPair(), emptyPair()] };
     if (exType === "marcar") return { ...base, answers: [emptyAnswer(), emptyAnswer(), emptyAnswer()], correctSet: [0] };
     return { ...base, answers: [emptyAnswer(), emptyAnswer()] };
   }
@@ -259,6 +288,28 @@ function exerciseToContent(item: EditorItem, common: Record<string, unknown>) {
     ...(item.supportIcon ? { supportIcon: item.supportIcon } : {}),
     ...(item.supportImage ? { supportImage: cleanImage(item.supportImage) } : {}),
   };
+  if (item.exType === "lacunas") {
+    return {
+      type: "lacunas",
+      ...common,
+      ...support,
+      text: item.gapText.trim(),
+      extras: item.extras.map((w) => w.trim()).filter(Boolean),
+    };
+  }
+  if (item.exType === "ligar") {
+    const side = (a: EditorAnswer) => ({
+      label: a.label.trim(),
+      ...(a.icon ? { icon: a.icon } : {}),
+      ...(a.image ? { image: cleanImage(a.image) } : {}),
+    });
+    return {
+      type: "ligar",
+      ...common,
+      ...support,
+      pairs: item.pairs.map((pr, j) => ({ id: `p${j + 1}`, left: side(pr.left), right: side(pr.right) })),
+    };
+  }
   if (item.exType === "vf") {
     return {
       type: "vf",
@@ -332,6 +383,12 @@ export function toContent(
   };
 }
 
+interface StoredCard {
+  label: string;
+  icon?: IconName;
+  image?: ImageRef;
+}
+
 interface StoredItem {
   prompt: string;
   hint?: string;
@@ -342,6 +399,9 @@ interface StoredItem {
   correctId?: string;
   correctIds?: string[];
   statements?: { id: string; text: string; correct: boolean }[];
+  text?: string;
+  extras?: string[];
+  pairs?: { id: string; left: StoredCard; right: StoredCard }[];
   extraLetters?: number;
   letterCase?: LetterCase;
   showModel?: boolean;
@@ -354,6 +414,8 @@ interface StoredItem {
   a?: number;
   b?: number;
 }
+
+const storedCard = (c: StoredCard): EditorAnswer => ({ label: c.label, icon: c.icon ?? "", image: c.image ?? null });
 
 /** JSON já validado → editor (para abrir uma atividade existente). */
 export function fromContent(module: SupportedModule, content: unknown): EditorItem[] {
@@ -379,6 +441,9 @@ export function fromContent(module: SupportedModule, content: unknown): EditorIt
       correctIndex: isSheet ? Math.max(0, options.findIndex((o) => o.id === s.correctId)) : 0,
       correctSet: (s.correctIds ?? []).map((id) => options.findIndex((o) => o.id === id)).filter((j) => j >= 0),
       statements: (s.statements ?? []).map((st) => ({ text: st.text, correct: st.correct })),
+      gapText: s.text ?? "",
+      extras: s.extras ?? [],
+      pairs: (s.pairs ?? []).map((pr) => ({ left: storedCard(pr.left), right: storedCard(pr.right) })),
       display: s.display ?? "",
       a: s.a ?? 1,
       b: s.b ?? 1,
@@ -425,6 +490,36 @@ export function validateItems(module: SupportedModule, items: EditorItem[]): str
       if (images.some((img) => img.alt.trim().length < 3)) errors.push(`${n}: descreva cada imagem (para quem não enxerga).`);
       if (item.supportText.trim().length > MAX_SUPPORT_TEXT) {
         errors.push(`${n}: o texto de apoio pode ter até ${MAX_SUPPORT_TEXT} letras.`);
+      }
+      if (item.exType === "lacunas") {
+        const { answers } = parseGaps(item.gapText);
+        if (answers.length < 1) errors.push(`${n}: coloque entre [colchetes] as palavras que a criança vai encaixar.`);
+        if (answers.length > MAX_GAPS) errors.push(`${n}: use no máximo ${MAX_GAPS} lacunas.`);
+        if (answers.some((a) => !a || a.length > 30)) errors.push(`${n}: cada palavra entre colchetes pode ter até 30 letras.`);
+        const hidden = new Set(answers.map(wordValue));
+        const extras = item.extras.map((w) => w.trim()).filter(Boolean);
+        if (extras.some((w) => hidden.has(wordValue(w)))) {
+          errors.push(`${n}: uma palavra extra é igual a uma resposta (ela também valeria).`);
+        }
+        if (new Set(extras.map(wordValue)).size !== extras.length) errors.push(`${n}: há palavras extras repetidas.`);
+        return;
+      }
+      if (item.exType === "ligar") {
+        if (item.pairs.length < MIN_PAIRS || item.pairs.length > MAX_PAIRS) {
+          errors.push(`${n}: use de ${MIN_PAIRS} a ${MAX_PAIRS} pares.`);
+        }
+        item.pairs.forEach((pr, j) => {
+          if (!pr.left.label.trim() || !pr.right.label.trim()) errors.push(`${n}: escreva os dois lados do par ${j + 1}.`);
+        });
+        for (const side of ["left", "right"] as const) {
+          const labels = item.pairs.map((pr) => wordValue(pr[side].label)).filter(Boolean);
+          if (new Set(labels).size !== labels.length) {
+            errors.push(`${n}: há ${side === "left" ? "itens" : "pares"} repetidos (cada um liga com um só).`);
+          }
+        }
+        const pairImages = item.pairs.flatMap((pr) => [pr.left.image, pr.right.image]).filter((img): img is ImageRef => img !== null);
+        if (pairImages.some((img) => img.alt.trim().length < 3)) errors.push(`${n}: descreva cada imagem (para quem não enxerga).`);
+        return;
       }
       if (item.exType === "vf") {
         if (item.statements.length < 1 || item.statements.length > MAX_STATEMENTS) {

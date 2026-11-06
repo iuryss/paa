@@ -15,9 +15,11 @@ export function shuffled<T>(list: readonly T[], random: () => number = Math.rand
  * Exceções: o mapa (Localização) mantém a ordem fixa Norte/Sul/Leste/Oeste, porque posições
  * previsíveis ajudam crianças com TEA e a bússola é uma sequência convencional; e itens com
  * `fixedOrder` (Verdadeiro sempre antes de Falso).
+ * Encaixar: as peças (banco de palavras, itens da direita) se misturam; as casas ficam em ordem.
  */
 export function shuffleItemOptions(items: PlayItem[], random: () => number = Math.random): PlayItem[] {
-  return items.map((item) =>
-    item.stimulus.kind === "map" || item.fixedOrder ? item : { ...item, options: shuffled(item.options, random) },
-  );
+  return items.map((item) => {
+    if (item.place) return { ...item, place: { ...item.place, tiles: shuffled(item.place.tiles, random) } };
+    return item.stimulus.kind === "map" || item.fixedOrder ? item : { ...item, options: shuffled(item.options, random) };
+  });
 }

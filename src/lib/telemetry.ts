@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { checkNameAttempt } from "@/lib/activities/name";
 import { maxHelp } from "@/lib/activities/runner";
-import { isCorrectOption, parseActivityContent } from "@/lib/validation/activities";
+import { judgeAttempt, parseActivityContent } from "@/lib/validation/activities";
 import type { AttemptInput } from "@/lib/validation/telemetry";
 
 export type TelemetryErrorCode = "not_found" | "closed" | "invalid_item";
@@ -77,11 +77,10 @@ export async function recordAttempt(
     if (judged === null) throw new TelemetryError("invalid_item");
     correct = judged;
   } else {
-    const item = parsed.items.find((i) => i.key === input.itemKey);
-    if (!item || !item.options.some((o) => o.id === input.optionId)) {
-      throw new TelemetryError("invalid_item");
-    }
-    correct = isCorrectOption(item, input.optionId);
+    // Escolha (opção certa) ou encaixe (a peça vale o que a casa espera): a mesma regra da tela.
+    const judged = judgeAttempt(parsed.items, input.itemKey, input.optionId);
+    if (judged === null) throw new TelemetryError("invalid_item");
+    correct = judged;
   }
 
   await prisma.$transaction([

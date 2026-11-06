@@ -96,6 +96,17 @@ for (const theme of THEMES) {
       await expect(page.getByText(/Frase 1 de 2/)).toBeVisible();
       await scan(page, "Matéria: verdadeiro ou falso", findings);
 
+      // Encaixar: lacunas com uma palavra colocada e o ligar com um par ligado (linha desenhada).
+      await openActivity(page, "Encaixar");
+      await page.getByRole("group", { name: "Palavras" }).getByRole("button", { name: "gelo" }).click();
+      await expect(page.locator('[data-gap="1"]')).toHaveAttribute("data-state", "preenchida");
+      await scan(page, "Encaixar: lacunas", findings);
+      await page.getByRole("group", { name: "Palavras" }).getByRole("button", { name: "vapor" }).click();
+      await page.getByRole("button", { name: "Continuar" }).click();
+      await page.getByRole("group", { name: "Para ligar" }).getByRole("button", { name: "Círculo" }).click();
+      await expect(page.locator("svg line")).toHaveCount(1);
+      await scan(page, "Encaixar: ligar pares", findings);
+
       // Escrever o nome: quadro inicial, dica com modelo, peça em destaque e uma letra colocada.
       await openActivity(page, "Meu nome");
       const letters = page.getByRole("group", { name: "Letras" });

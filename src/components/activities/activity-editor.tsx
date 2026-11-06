@@ -13,6 +13,7 @@ import { Feedback } from "@/components/ui/feedback";
 import { Input, Label } from "@/components/ui/input";
 import {
   addAnswer,
+  addPair,
   addStatement,
   DIRECTION_LABEL,
   EMPTY_SHEET,
@@ -55,7 +56,11 @@ import {
   DIRECTIONS,
   EXERCISE_TYPES,
   MAX_EXAMPLE_TEXT,
+  MAX_EXTRA_WORDS,
+  MAX_PAIRS,
   MAX_SHEET_EXERCISES,
+  MIN_PAIRS,
+  parseGaps,
   MAX_SHEET_TEXT,
   MAX_STATEMENTS,
   MAX_SUPPORT_TEXT,
@@ -223,6 +228,125 @@ function SheetFields({
   );
 }
 
+/** Completar lacunas: a frase com [palavras] e as palavras extras do banco. */
+function GapFields({ id, item, onChange }: { id: string; item: EditorItem; onChange: (patch: Partial<EditorItem>) => void }) {
+  const { answers } = parseGaps(item.gapText);
+  return (
+    <>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor={`${id}-gaps`}>Frase com lacunas</Label>
+        <textarea
+          id={`${id}-gaps`}
+          rows={3}
+          maxLength={400}
+          value={item.gapText}
+          aria-describedby={`${id}-gaps-hint`}
+          className={TEXTAREA_CLASS}
+          onChange={(e) => onChange({ gapText: e.target.value })}
+        />
+        <p id={`${id}-gaps-hint`} className="text-label text-ink-muted">
+          Coloque entre colchetes as palavras que a criança vai encaixar: A matéria tem [massa] e [volume].
+        </p>
+        <p className="text-label text-ink" aria-live="polite">
+          {answers.length > 0 ? `Lacunas (${answers.length}): ${answers.join(", ")}` : "Nenhuma lacuna ainda."}
+        </p>
+      </div>
+      <fieldset className="flex flex-col gap-3">
+        <legend className="mb-1 text-label">Palavras extras no banco (opcional, até {MAX_EXTRA_WORDS})</legend>
+        {item.extras.map((word, j) => (
+          <div key={j} className="flex items-center gap-3">
+            <Input
+              aria-label={`Palavra extra ${j + 1}`}
+              value={word}
+              maxLength={30}
+              onChange={(e) => onChange({ extras: item.extras.map((w, k) => (k === j ? e.target.value : w)) })}
+            />
+            <Button
+              variant="icone"
+              icon={Trash2}
+              aria-label={`Remover palavra extra ${j + 1}`}
+              onClick={() => onChange({ extras: item.extras.filter((_, k) => k !== j) })}
+            />
+          </div>
+        ))}
+        {item.extras.length < MAX_EXTRA_WORDS ? (
+          <Button icon={Plus} className="self-start" onClick={() => onChange({ extras: [...item.extras, ""] })}>
+            Adicionar palavra extra
+          </Button>
+        ) : null}
+      </fieldset>
+    </>
+  );
+}
+
+/** Um lado do par: texto, figura e imagem (como as respostas). */
+function PairSideFields({
+  id,
+  title,
+  value,
+  onChange,
+}: {
+  id: string;
+  title: string;
+  value: EditorItem["pairs"][number]["left"];
+  onChange: (patch: Partial<EditorItem["pairs"][number]["left"]>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2">
+        <Label htmlFor={`${id}-label`}>{title}</Label>
+        <Input id={`${id}-label`} value={value.label} maxLength={40} onChange={(e) => onChange({ label: e.target.value })} />
+      </div>
+      <IconSelect id={`${id}-icon`} label={`Figura (${title.toLowerCase()})`} value={value.icon} onChange={(icon) => onChange({ icon })} />
+      <ImageField id={`${id}-image`} label={`Imagem (${title.toLowerCase()})`} value={value.image} onChange={(image) => onChange({ image })} />
+    </div>
+  );
+}
+
+/** Ligar pares (um para um): a criança liga cada item da esquerda ao seu par da direita. */
+function PairFields({
+  id,
+  item,
+  onChange,
+  onUpdate,
+}: {
+  id: string;
+  item: EditorItem;
+  onChange: (patch: Partial<EditorItem>) => void;
+  onUpdate: (fn: (item: EditorItem) => EditorItem) => void;
+}) {
+  const setSide = (j: number, side: "left" | "right", patch: Partial<EditorItem["pairs"][number]["left"]>) =>
+    onChange({ pairs: item.pairs.map((pr, k) => (k === j ? { ...pr, [side]: { ...pr[side], ...patch } } : pr)) });
+  return (
+    <fieldset className="flex flex-col gap-4">
+      <legend className="mb-1 text-label">
+        Pares (de {MIN_PAIRS} a {MAX_PAIRS}): a coluna da direita aparece misturada para a criança
+      </legend>
+      {item.pairs.map((pair, j) => (
+        <div key={j} role="group" aria-label={`Par ${j + 1}`} className="flex flex-col gap-4 rounded-[20px] border-2 border-border bg-surface p-4">
+          <div className="grid gap-6 sm:grid-cols-2">
+            <PairSideFields id={`${id}-p${j}-l`} title={`Esquerda ${j + 1}`} value={pair.left} onChange={(patch) => setSide(j, "left", patch)} />
+            <PairSideFields id={`${id}-p${j}-r`} title={`Direita ${j + 1}`} value={pair.right} onChange={(patch) => setSide(j, "right", patch)} />
+          </div>
+          <Button
+            icon={Trash2}
+            className="self-start"
+            disabled={item.pairs.length <= MIN_PAIRS}
+            onClick={() => onChange({ pairs: item.pairs.filter((_, k) => k !== j) })}
+          >
+            Remover par {j + 1}
+          </Button>
+        </div>
+      ))}
+      {item.pairs.length < MAX_PAIRS ? (
+        <Button icon={Plus} className="self-start" onClick={() => onUpdate(addPair)}>
+          Adicionar par
+        </Button>
+      ) : null}
+    </fieldset>
+  );
+}
+
 /** Exercício da folha: apoio próprio (opcional) e as respostas ou frases, com a(s) certa(s) marcada(s). */
 function ExerciseFields({
   id,
@@ -271,7 +395,11 @@ function ExerciseFields({
         onChange={(supportImage) => onChange({ supportImage })}
       />
 
-      {item.exType === "vf" ? (
+      {item.exType === "lacunas" ? (
+        <GapFields id={id} item={item} onChange={onChange} />
+      ) : item.exType === "ligar" ? (
+        <PairFields id={id} item={item} onChange={onChange} onUpdate={onUpdate} />
+      ) : item.exType === "vf" ? (
         <fieldset className="flex flex-col gap-4">
           <legend className="mb-1 text-label">Frases (de 1 a {MAX_STATEMENTS}): a criança diz se cada uma é verdadeira</legend>
           {item.statements.map((statement, j) => (
