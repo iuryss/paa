@@ -3,6 +3,7 @@
 import { DndContext, PointerSensor, useSensor, useSensors, type Announcements, type DragEndEvent } from "@dnd-kit/core";
 import { Lightbulb } from "lucide-react";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { MathText } from "@/components/math-text";
 import { FiguresBoard, OrderBoard, SortBoard } from "@/components/place-boards";
 import { CardContent, DROP_ID, DropArea, Piece, PieceBank, type PieceProps } from "@/components/place-pieces";
 import { Button } from "@/components/ui/button";
@@ -215,7 +216,7 @@ function GapsBoard({
       <DropArea label="Frase para completar">
         <p className="max-w-[45ch] text-leitura leading-[3.25rem] text-ink">
           {place.segments!.map((segment, i) => {
-            if (segment !== null) return <span key={i}>{segment}</span>;
+            if (segment !== null) return <span key={i}><MathText text={segment} /></span>;
             gap += 1;
             const word = label(placed[gap]);
             const isCurrent = gap === current;
