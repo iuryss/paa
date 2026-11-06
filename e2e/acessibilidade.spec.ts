@@ -107,6 +107,22 @@ for (const theme of THEMES) {
       await expect(page.locator("svg line")).toHaveCount(1);
       await scan(page, "Encaixar: ligar pares", findings);
 
+      // Organizar: ordenar com uma peça colocada, nomear e separar com um cartão guardado.
+      await openActivity(page, "Organizar");
+      await page.getByRole("group", { name: "Peças" }).getByRole("button", { name: "S", exact: true }).click();
+      await expect(page.locator('[data-order="1"]')).toHaveAttribute("data-state", "preenchida");
+      await scan(page, "Organizar: ordenar", findings);
+      await page.getByRole("group", { name: "Peças" }).getByRole("button", { name: "O", exact: true }).click();
+      await page.getByRole("group", { name: "Peças" }).getByRole("button", { name: "L", exact: true }).click();
+      await page.getByRole("button", { name: "Continuar" }).click();
+      await page.getByRole("group", { name: "Palavras" }).getByRole("button", { name: "Gato" }).click();
+      await expect(page.locator('[data-figure="1"]')).toHaveAttribute("data-state", "preenchida");
+      await scan(page, "Organizar: nomear", findings);
+      await page.getByRole("group", { name: "Palavras" }).getByRole("button", { name: "Sol" }).click();
+      await page.getByRole("button", { name: "Continuar" }).click();
+      await expect(page.getByText("Cartão 1 de 3")).toBeVisible();
+      await scan(page, "Organizar: separar", findings);
+
       // Escrever o nome: quadro inicial, dica com modelo, peça em destaque e uma letra colocada.
       await openActivity(page, "Meu nome");
       const letters = page.getByRole("group", { name: "Letras" });

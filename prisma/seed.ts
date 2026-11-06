@@ -223,6 +223,70 @@ async function main() {
     create: { activityId: encaixar.id, studentId: student.id, assignedBy: teacher.id },
   });
 
+  // Folha com ordenar, nomear e separar em grupos (sem sessões, para ficar editável).
+  const organizar = {
+    id: "seed-organizar",
+    module: "FOLHA" as const,
+    title: "Organizar e separar",
+    instruction: "Coloque em ordem, dê os nomes e separe",
+    content: {
+      items: [
+        {
+          type: "ordenar",
+          key: "item-1",
+          prompt: "Organize as letras e forme a palavra",
+          hint: "É o que a gente bebe.",
+          order: "letras",
+          pieces: ["Á", "G", "U", "A"],
+        },
+        {
+          type: "ordenar",
+          key: "item-2",
+          prompt: "Coloque a rotina na ordem",
+          order: "passos",
+          pieces: ["Acordar", "Tomar banho", "Comer", "Ir para a escola"],
+        },
+        {
+          type: "nomear",
+          key: "item-3",
+          prompt: "Dê o nome de cada figura",
+          figures: [
+            { icon: "gato", answer: "Gato" },
+            { icon: "sol", answer: "Sol" },
+            { icon: "livro", answer: "Livro" },
+          ],
+          extras: ["Lua"],
+        },
+        {
+          type: "classificar",
+          key: "item-4",
+          prompt: "Separe os fenômenos nas caixas",
+          hint: "Se virou outra coisa, é químico.",
+          groups: [
+            { id: "g1", label: "Físico" },
+            { id: "g2", label: "Químico" },
+          ],
+          cards: [
+            { id: "c1", label: "Gelo derretendo", group: "g1" },
+            { id: "c2", label: "Papel amassado", group: "g1" },
+            { id: "c3", label: "Ferrugem", group: "g2" },
+            { id: "c4", label: "Papel queimado", group: "g2" },
+          ],
+        },
+      ],
+    },
+  };
+  await prisma.activity.upsert({
+    where: { id: organizar.id },
+    update: { content: organizar.content, title: organizar.title, instruction: organizar.instruction, published: true },
+    create: { ...organizar, published: true, authorId: teacher.id },
+  });
+  await prisma.assignment.upsert({
+    where: { activityId_studentId: { activityId: organizar.id, studentId: student.id } },
+    update: {},
+    create: { activityId: organizar.id, studentId: student.id, assignedBy: teacher.id },
+  });
+
   // Escrever o nome: só a configuração; as letras vêm do apelido de cada aluno ("Sol").
   const nome = {
     id: "seed-nome",
@@ -284,7 +348,7 @@ async function main() {
     });
   }
 
-  console.log("Seed concluído (professor, aluno, 6 atividades e 8 sessões de demonstração).");
+  console.log("Seed concluído (professor, aluno, 7 atividades e 8 sessões de demonstração).");
 }
 
 main()

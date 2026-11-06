@@ -156,12 +156,43 @@ const encaixar = {
   ],
 };
 
+/** Folha "Organizar": ordenar letras, nomear figuras (+ uma extra) e separar em duas caixas. */
+const organizar = {
+  items: [
+    { type: "ordenar", key: "item-1", prompt: "Organize as letras", order: "letras", pieces: ["S", "O", "L"] },
+    {
+      type: "nomear",
+      key: "item-2",
+      prompt: "Dê o nome de cada figura",
+      figures: [
+        { icon: "gato", answer: "Gato" },
+        { icon: "sol", answer: "Sol" },
+      ],
+      extras: ["Lua"],
+    },
+    {
+      type: "classificar",
+      key: "item-3",
+      prompt: "Separe nas caixas",
+      groups: [
+        { id: "g1", label: "Físico" },
+        { id: "g2", label: "Químico" },
+      ],
+      cards: [
+        { id: "c1", label: "Gelo derretendo", group: "g1" },
+        { id: "c2", label: "Papel amassado", group: "g1" },
+        { id: "c3", label: "Ferrugem", group: "g2" },
+      ],
+    },
+  ],
+};
+
 export interface Seeded {
   teacherId: string;
   otherTeacherId: string;
   studentId: string;
   lockStudentId: string;
-  activities: { grafia: string; localizacao: string; matematica: string; livre: string; nome: string; materia: string; encaixar: string };
+  activities: { grafia: string; localizacao: string; matematica: string; livre: string; nome: string; materia: string; encaixar: string; organizar: string };
 }
 
 /** Apaga TUDO do banco de testes e recria o mínimo conhecido. Cada arquivo de teste começa limpo. */
@@ -200,13 +231,14 @@ export async function resetAndSeed(): Promise<Seeded> {
   const f = await activity("e2e-livre", "FOLHA", "Bichos", "Leia e escolha a resposta", bichos);
   const fm = await activity("e2e-materia", "FOLHA", "Matéria", "Leia e responda", materia);
   const fe = await activity("e2e-encaixar", "FOLHA", "Encaixar", "Encaixe e ligue", encaixar);
+  const fo = await activity("e2e-organizar", "FOLHA", "Organizar", "Ordene e separe", organizar);
   // Sem modelo e com 2 letras extras: o e2e consegue ver a escada de dicas inteira.
   const n = await activity("e2e-nome", "NOME", "Meu nome", "Monte o seu nome", {
     items: [{ key: "nome", prompt: "Escreva seu nome", extraLetters: 2, letterCase: "MAIUSCULAS", showModel: false }],
   });
 
   for (const s of [sol, lua]) {
-    for (const a of [g, l, m, f, n, fm, fe]) {
+    for (const a of [g, l, m, f, n, fm, fe, fo]) {
       await prisma.assignment.create({ data: { activityId: a.id, studentId: s.id, assignedBy: teacher.id } });
     }
   }
@@ -216,7 +248,7 @@ export async function resetAndSeed(): Promise<Seeded> {
     otherTeacherId: other.id,
     studentId: sol.id,
     lockStudentId: lua.id,
-    activities: { grafia: g.id, localizacao: l.id, matematica: m.id, livre: f.id, nome: n.id, materia: fm.id, encaixar: fe.id },
+    activities: { grafia: g.id, localizacao: l.id, matematica: m.id, livre: f.id, nome: n.id, materia: fm.id, encaixar: fe.id, organizar: fo.id },
   };
 }
 
