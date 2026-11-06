@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { AdaptiveLabel } from "@/components/adaptive-label";
 import { Pictogram } from "@/components/pictogram";
 import { UploadedImage } from "@/components/uploaded-image";
+import { spokenMath } from "@/lib/activities/math";
 import type { PlaceCard, PlayItem } from "@/lib/validation/activities";
 import { cn } from "@/lib/utils";
 
@@ -60,7 +61,7 @@ export function Piece({
       }}
       type="button"
       data-piece={id}
-      aria-label={`${name}${highlighted ? ". Dica: esta" : ""}`}
+      aria-label={`${spokenMath(name)}${highlighted ? ". Dica: esta" : ""}`}
       aria-describedby={describedBy}
       aria-disabled={disabled || undefined}
       onClick={onPlace}

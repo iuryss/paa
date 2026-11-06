@@ -1,4 +1,5 @@
 import { MAX_MARKERS } from "@/lib/activities/markers";
+import { encodeTyped, parseNumber } from "@/lib/activities/math";
 import { MAX_EXTRA_LETTERS, type LetterCase } from "@/lib/activities/name";
 import {
   DIRECTIONS,
@@ -10,11 +11,14 @@ import {
   MAX_GROUPS,
   MAX_PAIRS,
   MAX_PIECES,
+  MAX_QUESTIONS,
   MAX_SHEET_EXERCISES,
+  MAX_WORD_OPTIONS,
   MIN_GROUPS,
   MIN_PAIRS,
   MIN_PIECES,
   parseGaps,
+  parseMarkedWords,
   wordValue,
   MAX_SHEET_TEXT,
   MAX_STATEMENTS,
@@ -58,7 +62,15 @@ export const EXERCISE_LABEL: Record<ExerciseType, string> = {
   ordenar: "Colocar em ordem",
   nomear: "Nomear imagens",
   classificar: "Separar em grupos",
+  numero: "Resposta em número",
+  marcartexto: "Marcar no texto",
 };
+
+/** Resposta em número: a conta e a resposta certa. */
+export interface EditorQuestion {
+  expression: string;
+  answer: string;
+}
 
 export const ORDER_MODE_LABEL: Record<OrderMode, string> = {
   letras: "Letras de uma palavra",
@@ -110,7 +122,7 @@ export interface EditorItem {
   correctSet: number[];
   /** Verdadeiro ou falso: as frases. */
   statements: EditorStatement[];
-  /** Completar lacunas: a frase com as palavras escondidas entre [colchetes], e as palavras extras. */
+  /** Completar lacunas e marcar no texto: o texto com palavras entre [colchetes]; lacunas têm palavras extras. */
   gapText: string;
   extras: string[];
   /** Ligar pares: de 2 a 5. */
@@ -123,6 +135,8 @@ export interface EditorItem {
   /** Separar em grupos: as caixas e os cartões. */
   groups: EditorAnswer[];
   cards: EditorCard[];
+  /** Resposta em número: de 1 a 8 contas. */
+  questions: EditorQuestion[];
   prompt: string;
   hint: string;
   /** Grafia e Matemática: de 1 a 3 opções erradas. */
@@ -197,6 +211,13 @@ const emptyAnswer = (): EditorAnswer => ({ label: "", icon: "", image: null });
 const emptyStatement = (): EditorStatement => ({ text: "", correct: true });
 const emptyPair = (): EditorPair => ({ left: emptyAnswer(), right: emptyAnswer() });
 
+const emptyQuestion = (): EditorQuestion => ({ expression: "", answer: "" });
+
+export function addQuestion(item: EditorItem): EditorItem {
+  if (item.questions.length >= MAX_QUESTIONS) return item;
+  return { ...item, questions: [...item.questions, emptyQuestion()] };
+}
+
 const emptyFigure = (): EditorFigure => ({ icon: "", image: null, answer: "" });
 const emptyCard = (group: number): EditorCard => ({ ...emptyAnswer(), group });
 
@@ -257,6 +278,7 @@ export function emptyItem(module: SupportedModule, exType: ExerciseType = "escol
     figures: [],
     groups: [],
     cards: [],
+    questions: [],
     prompt: "",
     hint: "",
     distractors: [],
@@ -275,6 +297,8 @@ export function emptyItem(module: SupportedModule, exType: ExerciseType = "escol
     if (exType === "lacunas") return { ...base, prompt: "Complete com as palavras", extras: [""] };
     if (exType === "ligar") return { ...base, prompt: "Ligue cada um ao seu par", pairs: [emptyPair(), emptyPair()] };
     if (exType === "ordenar") return { ...base, prompt: "Coloque na ordem certa" };
+    if (exType === "numero") return { ...base, prompt: "Resolva a conta", questions: [emptyQuestion()] };
+    if (exType === "marcartexto") return { ...base, prompt: "Toque nas palavras certas" };
     if (exType === "nomear") return { ...base, prompt: "Dê o nome de cada figura", figures: [emptyFigure(), emptyFigure()] };
     if (exType === "classificar") {
       return { ...base, prompt: "Separe nas caixas", groups: [emptyAnswer(), emptyAnswer()], cards: [emptyCard(0), emptyCard(1)] };
@@ -373,6 +397,15 @@ function exerciseToContent(item: EditorItem, common: Record<string, unknown>) {
     ...(a.icon ? { icon: a.icon } : {}),
     ...(a.image ? { image: cleanImage(a.image) } : {}),
   });
+  if (item.exType === "numero") {
+    return {
+      type: "numero",
+      ...common,
+      ...support,
+      questions: item.questions.map((q, j) => ({ id: `q${j + 1}`, expression: q.expression.trim(), answer: q.answer.trim() })),
+    };
+  }
+  if (item.exType === "marcartexto") return { type: "marcartexto", ...common, ...support, text: item.gapText.trim() };
   if (item.exType === "ordenar") {
     return { type: "ordenar", ...common, ...support, order: item.orderMode, pieces: orderPieces(item.orderMode, item.orderText) };
   }
@@ -507,6 +540,7 @@ interface StoredItem {
   text?: string;
   extras?: string[];
   pairs?: { id: string; left: StoredCard; right: StoredCard }[];
+  questions?: { id: string; expression: string; answer: string }[];
   order?: OrderMode;
   pieces?: string[];
   figures?: { icon?: IconName; image?: ImageRef; answer: string }[];
@@ -554,6 +588,7 @@ export function fromContent(module: SupportedModule, content: unknown): EditorIt
       gapText: s.text ?? "",
       extras: s.extras ?? [],
       pairs: (s.pairs ?? []).map((pr) => ({ left: storedCard(pr.left), right: storedCard(pr.right) })),
+      questions: (s.questions ?? []).map((q) => ({ expression: q.expression, answer: q.answer })),
       orderMode: s.order ?? "palavras",
       orderText: (s.pieces ?? []).join(s.order === "letras" ? "" : s.order === "passos" ? "\n" : " "),
       figures: (s.figures ?? []).map((f) => ({ icon: f.icon ?? "", image: f.image ?? null, answer: f.answer })),
@@ -620,6 +655,26 @@ export function validateItems(module: SupportedModule, items: EditorItem[]): str
           errors.push(`${n}: uma palavra extra é igual a uma resposta (ela também valeria).`);
         }
         if (new Set(extras.map(wordValue)).size !== extras.length) errors.push(`${n}: há palavras extras repetidas.`);
+        return;
+      }
+      if (item.exType === "numero") {
+        if (item.questions.length < 1 || item.questions.length > MAX_QUESTIONS) {
+          errors.push(`${n}: use de 1 a ${MAX_QUESTIONS} contas.`);
+        }
+        item.questions.forEach((q, j) => {
+          if (!q.expression.trim()) errors.push(`${n}: escreva a conta ${j + 1}.`);
+          if (parseNumber(q.answer) === null || encodeTyped(q.answer) === null) {
+            errors.push(`${n}: a resposta da conta ${j + 1} precisa ser um número (ex.: 8, -3, 0,5 ou 1/8).`);
+          }
+        });
+        return;
+      }
+      if (item.exType === "marcartexto") {
+        const words = parseMarkedWords(item.gapText);
+        const right = words.filter((w) => w.correct).length;
+        if (right < 1) errors.push(`${n}: coloque entre [colchetes] as palavras certas.`);
+        else if (right === words.length) errors.push(`${n}: deixe palavras de fora dos colchetes (senão não há o que escolher).`);
+        if (words.length > MAX_WORD_OPTIONS) errors.push(`${n}: use no máximo ${MAX_WORD_OPTIONS} palavras.`);
         return;
       }
       if (item.exType === "ordenar") {

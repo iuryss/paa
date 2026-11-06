@@ -5,6 +5,7 @@ import {
   addFigure,
   addGroup,
   addPair,
+  addQuestion,
   addStatement,
   emptyItem,
   fromContent,
@@ -491,5 +492,48 @@ describe("Folha: colocar em ordem, nomear imagens e separar em grupos", () => {
     let figures = emptyItem("FOLHA", "nomear");
     for (let i = 0; i < 8; i++) figures = addFigure(figures);
     expect(figures.figures).toHaveLength(6);
+  });
+});
+
+describe("Folha: resposta em número e marcar no texto", () => {
+  const numero: EditorItem = {
+    ...emptyItem("FOLHA", "numero"),
+    questions: [
+      { expression: "2^3", answer: "8" },
+      { expression: "1/2 + 1/4", answer: "0,75" },
+    ],
+  };
+  const marcar: EditorItem = { ...emptyItem("FOLHA", "marcartexto"), gapText: "O [gelo] é água." };
+
+  it("começam com o pedido pronto; número com uma conta vazia", () => {
+    expect(emptyItem("FOLHA", "numero")).toMatchObject({ prompt: "Resolva a conta", questions: [{ expression: "", answer: "" }] });
+    expect(emptyItem("FOLHA", "marcartexto").prompt).toBe("Toque nas palavras certas");
+  });
+
+  it("toContent aceito pelo schema; ida e volta igual", () => {
+    const content = toContent("FOLHA", [numero, marcar]);
+    expect(contentSchemas.FOLHA.safeParse(content).success).toBe(true);
+    expect(content.items[0]).toMatchObject({ questions: [{ id: "q1", expression: "2^3", answer: "8" }, { id: "q2" }] });
+    expect(content.items[1]).toMatchObject({ type: "marcartexto", text: "O [gelo] é água." });
+    const back = fromContent("FOLHA", content);
+    expect(back[0]).toMatchObject({ exType: "numero", questions: numero.questions });
+    expect(back[1]).toMatchObject({ exType: "marcartexto", gapText: "O [gelo] é água." });
+  });
+
+  it("valida conta vazia, resposta que não é número, e palavras certas", () => {
+    expect(validateItems("FOLHA", [numero, marcar])).toEqual([]);
+    const errors = validateItems("FOLHA", [{ ...numero, questions: [{ expression: " ", answer: "oito" }] }]);
+    expect(errors).toContain("Exercício 1: escreva a conta 1.");
+    expect(errors).toContain("Exercício 1: a resposta da conta 1 precisa ser um número (ex.: 8, -3, 0,5 ou 1/8).");
+    expect(validateItems("FOLHA", [{ ...marcar, gapText: "Sem marca." }])).toContain("Exercício 1: coloque entre [colchetes] as palavras certas.");
+    expect(validateItems("FOLHA", [{ ...marcar, gapText: "[Tudo] [certo]" }])).toContain(
+      "Exercício 1: deixe palavras de fora dos colchetes (senão não há o que escolher).",
+    );
+  });
+
+  it("no máximo 8 contas", () => {
+    let item = numero;
+    for (let i = 0; i < 10; i++) item = addQuestion(item);
+    expect(item.questions).toHaveLength(8);
   });
 });

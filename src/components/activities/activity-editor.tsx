@@ -66,8 +66,8 @@ import {
   type SupportedModule,
 } from "@/lib/validation/activities";
 
-/** Tipos de exercício que usam o motor de encaixar (têm formulário próprio em place-fields). */
-const PLACE_TYPES: readonly ExerciseType[] = ["lacunas", "ligar", "ordenar", "nomear", "classificar"];
+/** Tipos de exercício com formulário próprio em place-fields. */
+const PLACE_TYPES: readonly ExerciseType[] = ["lacunas", "ligar", "ordenar", "nomear", "classificar", "numero", "marcartexto"];
 
 /** Na pré-visualização não há aluno: um apelido de exemplo, curto como os de verdade. */
 const PREVIEW_NAME = "Sol";
@@ -173,8 +173,8 @@ function SheetFields({
             onChange={(e) => onChange({ text: e.target.value })}
           />
           <p id={`${uid}-sheet-text-hint`} className="text-label text-ink-muted">
-            Para destacar uma palavra, escreva entre dois asteriscos: **matéria**. ({sheet.text.length} de{" "}
-            {MAX_SHEET_TEXT} letras)
+            Para destacar uma palavra, escreva entre dois asteriscos: **matéria**. Contas: 2^3 vira potência, 1/2
+            vira fração e raiz(9) vira raiz. ({sheet.text.length} de {MAX_SHEET_TEXT} letras)
           </p>
         </div>
         <IconSelect id={`${uid}-sheet-icon`} label="Figura da leitura" value={sheet.icon} onChange={(icon) => onChange({ icon })} />

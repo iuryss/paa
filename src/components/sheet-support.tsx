@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useId } from "react";
+import { MathText } from "@/components/math-text";
 import { Pictogram } from "@/components/pictogram";
 import { UploadedImage } from "@/components/uploaded-image";
 import { ICON_LABEL } from "@/lib/activities/editor-model";
@@ -15,10 +16,10 @@ export function withHighlights(text: string): ReactNode[] {
   return text.split(/\*\*(.+?)\*\*/g).map((part, i) =>
     i % 2 === 1 ? (
       <strong key={i} className="rounded-[6px] bg-accent px-1 font-extrabold text-on-accent">
-        {part}
+        <MathText text={part} />
       </strong>
     ) : (
-      part
+      <MathText key={i} text={part} />
     ),
   );
 }

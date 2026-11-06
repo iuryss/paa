@@ -4,6 +4,7 @@ import { User } from "lucide-react";
 import { AdaptiveLabel } from "@/components/adaptive-label";
 import { Pictogram } from "@/components/pictogram";
 import { ICON_LABEL } from "@/lib/activities/editor-model";
+import { MathText } from "@/components/math-text";
 import { UploadedImage } from "@/components/uploaded-image";
 import type { Direction, IconName, ImageRef, Stimulus } from "@/lib/validation/activities";
 
@@ -100,7 +101,7 @@ function FreeStimulus({ text, icon, image }: { text?: string; icon?: IconName; i
         </span>
       ) : null}
       {text ? (
-        <p className="max-w-[45ch] self-start whitespace-pre-line text-leitura text-ink">{text}</p>
+        <p className="max-w-[45ch] self-start whitespace-pre-line text-leitura text-ink"><MathText text={text} /></p>
       ) : null}
     </div>
   );

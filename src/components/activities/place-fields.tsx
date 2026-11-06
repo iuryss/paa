@@ -3,6 +3,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import { IconSelect, SELECT_CLASS, TEXTAREA_CLASS } from "@/components/activities/editor-controls";
 import { ImageField } from "@/components/activities/image-field";
+import { MathText } from "@/components/math-text";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import {
@@ -10,6 +11,7 @@ import {
   addFigure,
   addGroup,
   addPair,
+  addQuestion,
   ORDER_MODE_LABEL,
   orderPieces,
   removeGroup,
@@ -20,12 +22,15 @@ import {
   MAX_EXTRA_WORDS,
   MAX_FIGURES,
   MAX_GROUPS,
+  MAX_MARK_TEXT,
   MAX_NAME_EXTRAS,
   MAX_PAIRS,
+  MAX_QUESTIONS,
   MIN_GROUPS,
   MIN_PAIRS,
   ORDER_MODES,
   parseGaps,
+  parseMarkedWords,
 } from "@/lib/validation/activities";
 
 interface FieldProps {
@@ -311,7 +316,76 @@ function SortFields({ id, item, onChange, onUpdate }: FieldProps) {
   );
 }
 
-/** Os campos dos exercícios de encaixar. */
+/** Resposta em número: cada conta com a resposta certa; a prévia mostra a notação como a criança vê. */
+function NumberFields({ id, item, onChange, onUpdate }: FieldProps) {
+  const setQuestion = (j: number, patch: Partial<EditorItem["questions"][number]>) =>
+    onChange({ questions: item.questions.map((q, k) => (k === j ? { ...q, ...patch } : q)) });
+  return (
+    <fieldset className="flex flex-col gap-4">
+      <legend className="mb-1 text-label">Contas (de 1 a {MAX_QUESTIONS}): uma por vez, com o teclado na tela</legend>
+      <p className="text-label text-ink-muted">
+        Escreva 2^3 para potência, 1/2 para fração e raiz(9) para raiz. Respostas equivalentes valem (1/2 = 0,5).
+      </p>
+      {item.questions.map((question, j) => (
+        <div key={j} role="group" aria-label={`Conta ${j + 1}`} className="flex flex-col gap-3 rounded-[20px] border-2 border-border bg-surface p-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`${id}-q${j}`}>Texto da conta {j + 1}</Label>
+            <Input id={`${id}-q${j}`} value={question.expression} maxLength={60} placeholder="2^3" onChange={(e) => setQuestion(j, { expression: e.target.value })} />
+            {question.expression.trim() ? (
+              <p className="text-body text-ink">
+                A criança vê: <MathText text={question.expression} /> = ?
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`${id}-q${j}-answer`}>Resposta certa da conta {j + 1}</Label>
+            <Input id={`${id}-q${j}-answer`} value={question.answer} maxLength={12} placeholder="8" onChange={(e) => setQuestion(j, { answer: e.target.value })} />
+          </div>
+          <Button
+            icon={Trash2}
+            className="self-start"
+            disabled={item.questions.length <= 1}
+            onClick={() => onChange({ questions: item.questions.filter((_, k) => k !== j) })}
+          >
+            Remover conta {j + 1}
+          </Button>
+        </div>
+      ))}
+      {item.questions.length < MAX_QUESTIONS ? (
+        <Button icon={Plus} className="self-start" onClick={() => onUpdate(addQuestion)}>
+          Adicionar conta
+        </Button>
+      ) : null}
+    </fieldset>
+  );
+}
+
+/** Marcar no texto: o texto com as palavras certas entre [colchetes]. */
+function MarkTextFields({ id, item, onChange }: FieldProps) {
+  const right = parseMarkedWords(item.gapText).filter((w) => w.correct);
+  return (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={`${id}-mark`}>Texto com as palavras certas</Label>
+      <textarea
+        id={`${id}-mark`}
+        rows={4}
+        maxLength={MAX_MARK_TEXT}
+        value={item.gapText}
+        aria-describedby={`${id}-mark-hint`}
+        className={TEXTAREA_CLASS}
+        onChange={(e) => onChange({ gapText: e.target.value })}
+      />
+      <p id={`${id}-mark-hint`} className="text-label text-ink-muted">
+        Coloque entre colchetes as palavras que a criança deve tocar: O [gelo] e o [vapor] são água.
+      </p>
+      <p className="text-label text-ink" aria-live="polite">
+        {right.length > 0 ? `Palavras certas (${right.length}): ${right.map((w) => w.label).join(", ")}` : "Nenhuma palavra marcada ainda."}
+      </p>
+    </div>
+  );
+}
+
+/** Os campos dos exercícios de encaixar, resposta em número e marcar no texto. */
 export function PlaceFields(props: FieldProps) {
   switch (props.item.exType) {
     case "lacunas":
@@ -324,6 +398,10 @@ export function PlaceFields(props: FieldProps) {
       return <FigureFields {...props} />;
     case "classificar":
       return <SortFields {...props} />;
+    case "numero":
+      return <NumberFields {...props} />;
+    case "marcartexto":
+      return <MarkTextFields {...props} />;
     default:
       return null;
   }

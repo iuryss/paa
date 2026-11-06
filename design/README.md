@@ -175,6 +175,12 @@ Imita a página do caderno adaptado: **leitura no topo, exercícios embaixo**.
 - **Separar em grupos**: o cartão da vez em cima (borda tracejada `drop-active-*`, "Cartão 2 de 4") e as caixas **sempre no mesmo lugar** embaixo; cada caixa é botão e alvo de soltar, e mostra os cartões já guardados com ✓.
 - Escada de dicas: a dica escrita do professor (se houver) e depois a peça certa em destaque. Sem dica escrita, o destaque vem direto.
 
+## Matemática e marcar no texto
+
+- **Notação**: `MathText` desenha potência (`sup`), fração empilhada e raiz; o leitor de tela ouve por extenso. Texto sem conta sai igual, sem elementos a mais.
+- **Teclado de números**: teclas de 64px em 3 colunas, 12px entre elas (exceção aos 24px, para caber em 375px sem rolagem), "Apagar" e **Pronto** (a ação principal enquanto a conta está aberta). Resposta diferente limpa o campo, com "Quase!".
+- **Marcar no texto**: cada palavra é um botão de 64px, na ordem da frase; o espaço entre elas é menor que 24px para o texto continuar sendo lido como texto. Não usa marcadores de cor/forma.
+
 ## Imagens do professor
 
 - Componente `UploadedImage`: `object-contain`, borda `border-subtle`, cantos 12px, nunca maior que o espaço (leitura até `max-h-72`, apoio `max-h-64`, resposta `max-h-24`). Carregamento preguiçoso; nada se mexe (imagens animadas são recusadas no envio).

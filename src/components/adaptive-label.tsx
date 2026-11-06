@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useAccessibility } from "@/components/accessibility-provider";
+import { MathText } from "@/components/math-text";
 
 interface AdaptiveLabelProps {
   text: string;
@@ -26,9 +27,9 @@ export function AdaptiveLabel({ text, icon }: AdaptiveLabelProps) {
         <span aria-hidden="true" className="block size-14 [&>svg]:size-full">
           {icon}
         </span>
-        <span className="text-label">{text}</span>
+        <span className="text-label"><MathText text={text} /></span>
       </span>
     );
   }
-  return <span>{text}</span>;
+  return <span><MathText text={text} /></span>;
 }

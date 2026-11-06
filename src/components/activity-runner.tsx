@@ -7,6 +7,8 @@ import { ActivityDone, useActivitySession, type SessionCallbacks } from "@/compo
 import { ActivityStimulus } from "@/components/activity-stimulus";
 import { AdaptiveLabel } from "@/components/adaptive-label";
 import { MarkerShape } from "@/components/marker-shape";
+import { MathText } from "@/components/math-text";
+import { NumberPad } from "@/components/number-pad";
 import { Pictogram } from "@/components/pictogram";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,6 +16,7 @@ import { Feedback } from "@/components/ui/feedback";
 import { PlaceStep } from "@/components/place-step";
 import { SheetSupportBlock } from "@/components/sheet-support";
 import { UploadedImage } from "@/components/uploaded-image";
+import { WordMarks } from "@/components/word-marks";
 import {
   answer,
   hintedOptionIndex,
@@ -29,8 +32,9 @@ import {
   tapHighlightedText,
   type MarkerStyle,
 } from "@/lib/activities/markers";
+import { encodeTyped, spokenMath } from "@/lib/activities/math";
 import { canSpeak, speak } from "@/lib/speech";
-import type { PlayItem, SheetSupport } from "@/lib/validation/activities";
+import { isCorrectOption, type PlayItem, type SheetSupport } from "@/lib/validation/activities";
 import { cn } from "@/lib/utils";
 
 interface ActivityRunnerProps extends SessionCallbacks {
@@ -49,7 +53,7 @@ interface ActivityRunnerProps extends SessionCallbacks {
 function progressLabel(item: PlayItem, index: number, total: number): string {
   if (!item.exercise) return `Passo ${index + 1} de ${total}`;
   const { part } = item.exercise;
-  return `Exercício ${item.exercise.index} de ${item.exercise.total}${part ? ` · Frase ${part.index} de ${part.total}` : ""}`;
+  return `Exercício ${item.exercise.index} de ${item.exercise.total}${part ? ` · ${part.label ?? "Frase"} ${part.index} de ${part.total}` : ""}`;
 }
 
 function optionTextClass(stimulus: PlayItem["stimulus"]): string {
@@ -108,6 +112,14 @@ export function ActivityRunner({
     send(result.attempt);
   };
 
+  /** Conta digitada: confere como qualquer resposta. Devolve se acertou (a errada é limpa no teclado). */
+  const submitTyped = (value: string): boolean => {
+    const optionId = encodeTyped(value);
+    if (!optionId) return false;
+    choose(optionId);
+    return isCorrectOption(item, optionId);
+  };
+
   const advance = async () => {
     if (index < items.length - 1) {
       setIndex(index + 1);
@@ -124,7 +136,7 @@ export function ActivityRunner({
   const markers = item.options.map((_, i) => markerFor(i, style));
   // A dica aponta a certa ainda não encontrada (no "marcar todas" ela muda a cada acerto).
   const targetIndex = hintedOptionIndex(item, state);
-  const correctMarker = markers[targetIndex];
+  const correctMarker = item.noMarkers ? undefined : markers[targetIndex];
   const lastFound = item.options.find((o) => o.id === state.found.at(-1));
   const multi = Boolean(item.correctIds);
   const remaining = remainingCorrect(item, state);
@@ -132,17 +144,27 @@ export function ActivityRunner({
 
   // Degrau mais alto da escada de dicas que a criança já alcançou.
   const pointed = state.visualHint || state.markerHint ? correctMarker : undefined;
+  // Sem marcadores, o degrau do destaque é a palavra marcada na tela, ou a resposta da conta.
+  const unmarkedHint = item.typed
+    ? `A resposta é ${item.typed.answer}.`
+    : `Toque em “${item.options[targetIndex]?.label ?? ""}”, que está em destaque.`;
   const hintText = pointed
     ? state.visualHint
       ? tapHighlightedText(pointed)
       : lookForText(pointed)
-    : state.hintShown
-      ? item.hint
-      : null;
+    : item.noMarkers && state.visualHint
+      ? unmarkedHint
+      : state.hintShown
+        ? item.hint
+        : null;
 
   let feedback: { tone: "acerto" | "redirecionar"; title: string; text: string } | null = null;
   if (state.status === "correct") {
-    const text = multi ? "Você achou todas!" : `Você achou: ${lastFound?.label ?? ""}.`;
+    const text = item.typed
+      ? `A resposta é ${item.typed.answer}.`
+      : multi
+        ? "Você achou todas!"
+        : `Você achou: ${lastFound?.label ?? ""}.`;
     feedback = { tone: "acerto", title: "Isso!", text };
   } else if (state.status === "partial") {
     const text = `Você achou: ${lastFound?.label ?? ""}. Falta${remaining > 1 ? "m" : ""} ${remaining}.`;
@@ -162,12 +184,12 @@ export function ActivityRunner({
       <header className="flex items-start justify-between gap-6">
         <div className="flex flex-col gap-2">
           <h1 id="pergunta" tabIndex={-1} ref={heading}>
-            {item.prompt}
+            <MathText text={item.prompt} />
           </h1>
           <p className="text-subtitle text-ink-muted">{progressLabel(item, index, items.length)}</p>
           {multi ? (
             <p className="text-label text-ink">
-              Marque todas as certas: {state.found.length} de {item.correctIds!.length}.
+              {item.words ? "Toque nas palavras certas" : "Marque todas as certas"}: {state.found.length} de {item.correctIds!.length}.
             </p>
           ) : null}
         </div>
@@ -198,6 +220,17 @@ export function ActivityRunner({
       <>
       <Card className="flex flex-col items-center gap-12">
         <ActivityStimulus stimulus={item.stimulus} />
+        {item.typed ? (
+          <NumberPad key={item.key} expression={item.typed.expression} done={state.status === "correct"} onSubmit={submitTyped} />
+        ) : item.words ? (
+          <WordMarks
+            words={item.options}
+            found={state.found}
+            highlightedId={state.visualHint && state.status !== "correct" ? item.options[targetIndex]?.id : undefined}
+            done={state.status === "correct"}
+            onToggle={choose}
+          />
+        ) : (
         <div role="group" aria-label="Respostas" className="grid w-full grid-cols-2 gap-6">
           {item.options.map((option, i) => {
             const marker = markers[i]!;
@@ -208,7 +241,7 @@ export function ActivityRunner({
                 key={option.id}
                 type="button"
                 // Nome explícito (começa pelo texto visível, WCAG 2.5.3): "a, triângulo amarelo".
-                aria-label={`${option.label}, ${marker.name}${highlighted ? ". Dica: esta opção" : ""}`}
+                aria-label={`${spokenMath(option.label)}, ${marker.name}${highlighted ? ". Dica: esta opção" : ""}`}
                 // Já encontrada (marcar todas) ou passo concluído: tocar de novo não faz nada.
                 aria-disabled={isCorrectChosen || state.status === "correct" ? true : undefined}
                 aria-pressed={multi ? isCorrectChosen : undefined}
@@ -241,6 +274,7 @@ export function ActivityRunner({
             );
           })}
         </div>
+        )}
       </Card>
 
       {/* A região live existe antes do texto mudar, para os leitores de tela anunciarem. */}
