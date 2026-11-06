@@ -1,21 +1,10 @@
 "use client";
 
-import {
-  DndContext,
-  PointerSensor,
-  useDraggable,
-  useDroppable,
-  useSensor,
-  useSensors,
-  type Announcements,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
-import { Check, Eye, Lightbulb } from "lucide-react";
+import { DndContext, PointerSensor, useSensor, useSensors, type Announcements, type DragEndEvent } from "@dnd-kit/core";
+import { Lightbulb } from "lucide-react";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { AdaptiveLabel } from "@/components/adaptive-label";
-import { Pictogram } from "@/components/pictogram";
-import { UploadedImage } from "@/components/uploaded-image";
+import { FiguresBoard, OrderBoard, SortBoard } from "@/components/place-boards";
+import { CardContent, DROP_ID, DropArea, Piece, PieceBank, type PieceProps } from "@/components/place-pieces";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Feedback } from "@/components/ui/feedback";
@@ -27,10 +16,24 @@ import {
   type PlaceBoard,
 } from "@/lib/activities/place";
 import type { AttemptRecord } from "@/lib/activities/runner";
-import type { PlaceCard, PlayItem } from "@/lib/validation/activities";
+import type { PlacePlay, PlayItem } from "@/lib/validation/activities";
 import { cn } from "@/lib/utils";
 
-const DROP_ID = "alvo";
+const DONE_TEXT: Record<PlacePlay["mode"], string> = {
+  lacunas: "Você completou tudo!",
+  ligar: "Você ligou todos!",
+  ordenar: "Você colocou tudo na ordem!",
+  nomear: "Você nomeou todas!",
+  classificar: "Você separou todos!",
+};
+
+const HOW_TO: Record<PlacePlay["mode"], string> = {
+  lacunas: "Toque na palavra (ou aperte Enter) para colocar na próxima lacuna. Também dá para arrastar.",
+  ligar: "Toque no par certo (ou aperte Enter) para ligar com o item destacado. Também dá para arrastar.",
+  ordenar: "Toque na peça (ou aperte Enter) para colocar na próxima posição. Também dá para arrastar.",
+  nomear: "Toque na palavra (ou aperte Enter) para colocar na figura destacada. Também dá para arrastar.",
+  classificar: "Toque na caixa certa (ou aperte Enter) para guardar o cartão. Também dá para arrastar o cartão.",
+};
 
 const ANNOUNCEMENTS: Announcements = {
   onDragStart: () => "Você pegou uma peça.",
@@ -38,88 +41,6 @@ const ANNOUNCEMENTS: Announcements = {
   onDragEnd: ({ over }) => (over ? "Você soltou a peça." : "A peça voltou para o lugar."),
   onDragCancel: () => "A peça voltou para o lugar.",
 };
-
-function CardContent({ card, imageClass = "max-h-16" }: { card: PlaceCard; imageClass?: string }) {
-  return (
-    <>
-      {card.image ? <UploadedImage image={card.image} className={cn(imageClass, "basis-full")} /> : null}
-      <AdaptiveLabel text={card.label} icon={card.icon ? <Pictogram name={card.icon} /> : undefined} />
-    </>
-  );
-}
-
-/** Peça tocável, arrastável e acionável por teclado (Enter = colocar na próxima casa). */
-function Piece({
-  id,
-  name,
-  disabled,
-  highlighted,
-  done,
-  describedBy,
-  onPlace,
-  buttonRef,
-  children,
-}: {
-  id: string;
-  name: string;
-  disabled: boolean;
-  highlighted: boolean;
-  done: boolean;
-  describedBy: string;
-  onPlace: () => void;
-  buttonRef: (el: HTMLButtonElement | null) => void;
-  children: ReactNode;
-}) {
-  const { setNodeRef, listeners, transform, isDragging } = useDraggable({ id, disabled });
-  return (
-    <button
-      ref={(el) => {
-        setNodeRef(el);
-        buttonRef(el);
-      }}
-      type="button"
-      data-piece={id}
-      aria-label={`${name}${highlighted ? ". Dica: esta" : ""}`}
-      aria-describedby={describedBy}
-      aria-disabled={disabled || undefined}
-      onClick={onPlace}
-      {...(disabled ? {} : listeners)}
-      style={{ transform: CSS.Translate.toString(transform) }}
-      className={cn(
-        "relative flex min-h-target flex-wrap items-center justify-center gap-2 rounded-[20px] border-2 px-5 py-2",
-        "select-none touch-none text-button text-ink",
-        done
-          ? "border-success-border bg-success-bg text-success-ink"
-          : highlighted
-            ? "border-drop-active-border bg-drop-active-bg"
-            : "border-border bg-surface",
-        isDragging ? "z-10 shadow-lift" : "shadow-rest",
-      )}
-    >
-      {children}
-      {highlighted ? <Eye aria-hidden="true" className="size-6" strokeWidth={2.5} /> : null}
-      {done ? <Check aria-hidden="true" className="size-6" strokeWidth={3} /> : null}
-    </button>
-  );
-}
-
-function DropArea({ children, className, label }: { children: ReactNode; className?: string; label: string }) {
-  const { setNodeRef, isOver } = useDroppable({ id: DROP_ID });
-  return (
-    <div
-      ref={setNodeRef}
-      aria-label={label}
-      role="group"
-      className={cn(
-        "rounded-[20px] border-2 border-dashed p-4",
-        isOver ? "border-drop-active-border bg-drop-active-bg" : "border-transparent",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}
 
 interface PlaceStepProps {
   item: PlayItem;
@@ -141,6 +62,7 @@ export function PlaceStep({ item, stimulus, now, send, onDone }: PlaceStepProps)
     slots: place.slots,
     tiles: place.tiles.map((t) => ({ id: t.id, value: t.value })),
     canTell: Boolean(item.hint),
+    reusableTiles: place.mode === "classificar",
   };
   const [state, setState] = useState(() => initialPlaceState(board, now()));
   const pieceRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -148,6 +70,7 @@ export function PlaceStep({ item, stimulus, now, send, onDone }: PlaceStepProps)
   const dragging = useRef(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const isLigar = place.mode === "ligar";
+  const isSort = place.mode === "classificar";
 
   const tileOf = (id: string) => place.tiles.find((t) => t.id === id);
   const highlightedId = state.highlight ? hintedTile(board, state)?.id : undefined;
@@ -166,14 +89,16 @@ export function PlaceStep({ item, stimulus, now, send, onDone }: PlaceStepProps)
     setState(result.state);
     send(result.attempt);
     if (result.state.status === "done") onDone();
-    else if (result.attempt.correct) {
+    else if (result.attempt.correct && !isSort) {
       // O foco vai para a próxima peça livre (no ligar, as já ligadas continuam na tela, mas travadas).
       refocus.current = place.tiles.find((t) => !result.state.placed.includes(t.id))?.id ?? null;
     }
   };
 
   const onDragEnd = (event: DragEndEvent) => {
-    if (event.over?.id === DROP_ID) place_(String(event.active.id));
+    // Classificar: arrasta-se o cartão e o alvo é a caixa. Nos outros, arrasta-se a peça até a área.
+    if (isSort && event.over) place_(String(event.over.id));
+    else if (event.over?.id === DROP_ID) place_(String(event.active.id));
     setTimeout(() => (dragging.current = false), 0);
   };
 
@@ -187,9 +112,14 @@ export function PlaceStep({ item, stimulus, now, send, onDone }: PlaceStepProps)
       : null;
   let feedback: { tone: "acerto" | "redirecionar"; title: string; text: string } | null = null;
   if (done) {
-    feedback = { tone: "acerto", title: "Isso!", text: isLigar ? "Você ligou todos!" : "Você completou tudo!" };
+    feedback = { tone: "acerto", title: "Isso!", text: DONE_TEXT[place.mode] };
   } else if (state.status === "placed") {
-    const text = isLigar ? `${lastLeft?.label} com ${lastPlaced?.label}.` : `“${lastPlaced?.label}”.`;
+    const lastCard = isSort ? place.cards![state.placed.length - 1] : undefined;
+    const text = isLigar
+      ? `${lastLeft?.label} com ${lastPlaced?.label}.`
+      : isSort
+        ? `${lastCard?.label} em ${lastPlaced?.label}.`
+        : `“${lastPlaced?.label}”.`;
     feedback = { tone: "acerto", title: "Isso!", text };
   } else if (state.status === "redirect") {
     feedback = { tone: "redirecionar", title: "Quase!", text: hintText ?? "Vamos tentar outra." };
@@ -224,9 +154,7 @@ export function PlaceStep({ item, stimulus, now, send, onDone }: PlaceStepProps)
         <Card className="flex flex-col items-center gap-12">
           {stimulus}
           <p id={`${uid}-como`} className="sr-only">
-            {isLigar
-              ? "Toque no par certo (ou aperte Enter) para ligar com o item destacado. Também dá para arrastar."
-              : "Toque na palavra (ou aperte Enter) para colocar na próxima lacuna. Também dá para arrastar."}
+            {HOW_TO[place.mode]}
           </p>
           {isLigar ? (
             <PairsBoard
@@ -235,8 +163,14 @@ export function PlaceStep({ item, stimulus, now, send, onDone }: PlaceStepProps)
               current={done ? -1 : state.slot}
               pieceProps={pieceProps}
             />
-          ) : (
+          ) : place.mode === "lacunas" ? (
             <GapsBoard item={item} placed={state.placed} current={done ? -1 : state.slot} pieceProps={pieceProps} />
+          ) : place.mode === "ordenar" ? (
+            <OrderBoard item={item} placed={state.placed} current={done ? -1 : state.slot} pieceProps={pieceProps} />
+          ) : place.mode === "nomear" ? (
+            <FiguresBoard item={item} placed={state.placed} current={done ? -1 : state.slot} pieceProps={pieceProps} />
+          ) : (
+            <SortBoard item={item} placed={state.placed} current={done ? -1 : state.slot} pieceProps={pieceProps} />
           )}
         </Card>
       </DndContext>
@@ -260,13 +194,6 @@ export function PlaceStep({ item, stimulus, now, send, onDone }: PlaceStepProps)
     </>
   );
 }
-
-type PieceProps = (tileId: string) => {
-  describedBy: string;
-  highlighted: boolean;
-  onPlace: () => void;
-  buttonRef: (el: HTMLButtonElement | null) => void;
-};
 
 /** A frase com as lacunas dentro do texto + o banco de palavras. */
 function GapsBoard({
@@ -314,24 +241,7 @@ function GapsBoard({
         </p>
       </DropArea>
 
-      <div role="group" aria-label="Palavras" className="flex flex-wrap justify-center gap-6">
-        {place.tiles.map((tile) =>
-          placed.includes(tile.id) ? (
-            // A palavra usada deixa o lugar marcado: as outras não mudam de posição.
-            <span
-              key={tile.id}
-              aria-hidden="true"
-              className="invisible flex min-h-target items-center rounded-[20px] border-2 px-5 text-button"
-            >
-              {tile.label}
-            </span>
-          ) : (
-            <Piece key={tile.id} id={tile.id} name={tile.label} disabled={false} done={false} {...pieceProps(tile.id)}>
-              <CardContent card={tile} />
-            </Piece>
-          ),
-        )}
-      </div>
+      <PieceBank item={item} label="Palavras" placed={placed} pieceProps={pieceProps} />
     </div>
   );
 }
