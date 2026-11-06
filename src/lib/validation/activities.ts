@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DEFAULT_MARKER_STYLE, MARKER_STYLES } from "@/lib/activities/markers";
+import { decodeTyped, encodeTyped, parseNumber, sameNumber } from "@/lib/activities/math";
 import { LETTER_CASES, MAX_EXTRA_LETTERS, type NameConfig } from "@/lib/activities/name";
 import { sanitizeText } from "@/lib/sanitize";
 import { imageIdSchema } from "@/lib/validation/images";
@@ -85,14 +86,24 @@ export interface PlayItem {
   /** Ordem fixa, sem embaralhar (ex.: Verdadeiro/Falso). */
   fixedOrder?: boolean;
   /** Folha: em qual exercício a criança está (e em qual frase, no V/F). */
-  exercise?: { index: number; total: number; part?: { index: number; total: number } };
+  exercise?: { index: number; total: number; part?: { index: number; total: number; label?: string } };
   /** Encaixar (lacunas, ligar pares): casas em ordem + peças. Sem opções de escolha. */
   place?: PlacePlay;
+  /** Resposta numérica: a conta mostrada e a resposta (equivalentes valem: 1/2 = 0,5). */
+  typed?: { expression: string; answer: string };
+  /** Marcar no texto: as opções são as palavras do texto, na ordem, tocadas como peças. */
+  words?: boolean;
+  /** Sem marcadores de cor/forma: a escada de dicas vai direto da dica escrita ao destaque. */
+  noMarkers?: boolean;
   stimulus: Stimulus;
 }
 
 /** A regra de "certo" de um passo, a mesma no navegador e no servidor. */
 export function isCorrectOption(item: PlayItem, optionId: string): boolean {
+  if (item.typed) {
+    const typed = decodeTyped(optionId);
+    return typed !== null && sameNumber(typed, item.typed.answer);
+  }
   return item.correctIds ? item.correctIds.includes(optionId) : optionId === item.correctId;
 }
 
@@ -137,6 +148,7 @@ export function judgeAttempt(items: PlayItem[], itemKey: string, optionId: strin
       return tile ? tile.value === slot.expected : null;
     }
     if (item.key === itemKey) {
+      if (item.typed) return decodeTyped(optionId) === null ? null : isCorrectOption(item, optionId);
       return item.options.some((o) => o.id === optionId) ? isCorrectOption(item, optionId) : null;
     }
   }
@@ -196,7 +208,34 @@ export const MAX_SHEET_TEXT = 800;
 export const MAX_EXAMPLE_TEXT = 300;
 export const MAX_SHEET_EXERCISES = 12;
 export const MAX_STATEMENTS = 6;
-export const EXERCISE_TYPES = ["escolha", "marcar", "vf", "lacunas", "ligar", "ordenar", "nomear", "classificar"] as const;
+export const EXERCISE_TYPES = [
+  "escolha",
+  "marcar",
+  "vf",
+  "lacunas",
+  "ligar",
+  "ordenar",
+  "nomear",
+  "classificar",
+  "numero",
+  "marcartexto",
+] as const;
+export const MAX_QUESTIONS = 8;
+export const MAX_MARK_TEXT = 300;
+export const MAX_WORD_OPTIONS = 60;
+
+/**
+ * "O [gelo] é água [sólida]." → as palavras do texto, em ordem; as que estão entre colchetes valem.
+ * Um colchete pode ter mais de uma palavra ("[água líquida]"), que vira uma peça só.
+ */
+export function parseMarkedWords(textWithMarks: string): { label: string; correct: boolean }[] {
+  const words: { label: string; correct: boolean }[] = [];
+  for (const m of textWithMarks.matchAll(/\[([^\[\]]+)\]([^\s\[]*)|([^\s\[\]]+)/g)) {
+    if (m[1] !== undefined) words.push({ label: `${m[1].trim()}${m[2] ?? ""}`, correct: true });
+    else words.push({ label: m[3]!, correct: false });
+  }
+  return words;
+}
 export const MAX_GAPS = 8;
 export const MAX_EXTRA_WORDS = 6;
 export const MIN_PAIRS = 2;
@@ -229,6 +268,8 @@ export const wordValue = (word: string) => word.trim().toLocaleLowerCase("pt-BR"
 /** Chave de telemetria de cada lacuna e de cada par: "item-2-l1", "item-3-p1". */
 export const gapKey = (exerciseKey: string, index: number) => `${exerciseKey}-l${index + 1}`;
 export const pairKey = (exerciseKey: string, pairId: string) => `${exerciseKey}-${pairId}`;
+/** Chave de cada conta da resposta numérica: "item-2-q1". */
+export const questionKey = (exerciseKey: string, questionId: string) => `${exerciseKey}-${questionId}`;
 /** Chaves de ordenar, nomear e classificar: "item-2-o1", "item-3-n1", "item-4-c1". */
 export const orderKey = (exerciseKey: string, index: number) => `${exerciseKey}-o${index + 1}`;
 export const figureKey = (exerciseKey: string, index: number) => `${exerciseKey}-n${index + 1}`;
@@ -319,6 +360,19 @@ const sheetExercise = z.discriminatedUnion("type", [
         .max(MAX_CARDS),
     })
     .strict(),
+  /** Resposta numérica: uma conta por vez, respondida no teclado da tela. */
+  z
+    .object({
+      type: z.literal("numero"),
+      ...exerciseBase,
+      questions: z
+        .array(z.object({ id: slug, expression: text(60), answer: z.string().trim().max(12) }).strict())
+        .min(1)
+        .max(MAX_QUESTIONS),
+    })
+    .strict(),
+  /** Marcar no texto: a criança toca as palavras certas (no papel: "circule no texto"). */
+  z.object({ type: z.literal("marcartexto"), ...exerciseBase, text: text(MAX_MARK_TEXT) }).strict(),
   /** Ligar pares (um para um): cada item da esquerda com o seu par da direita. */
   z
     .object({
@@ -363,6 +417,28 @@ function checkSheet({ items }: { items: SheetExercise[] }, ctx: z.RefinementCtx)
         ctx.addIssue({ code: "custom", path: ["items", i, "extras"], message: "Palavras extras repetidas ou iguais a uma resposta." });
       }
       answers.forEach((_, g) => addKey(gapKey(item.key, g), i));
+      return;
+    }
+    if (item.type === "numero") {
+      const ids = item.questions.map((q) => q.id);
+      if (new Set(ids).size !== ids.length) {
+        ctx.addIssue({ code: "custom", path: ["items", i, "questions"], message: "Contas repetidas." });
+      }
+      if (item.questions.some((q) => parseNumber(q.answer) === null || encodeTyped(q.answer) === null)) {
+        ctx.addIssue({ code: "custom", path: ["items", i, "questions"], message: "A resposta precisa ser um número (ex.: 8, -3, 0,5 ou 1/8)." });
+      }
+      ids.forEach((id) => addKey(questionKey(item.key, id), i));
+      return;
+    }
+    if (item.type === "marcartexto") {
+      const words = parseMarkedWords(item.text);
+      const right = words.filter((w) => w.correct).length;
+      if (right < 1 || right === words.length) {
+        ctx.addIssue({ code: "custom", path: ["items", i, "text"], message: "Coloque entre [colchetes] as palavras certas, e deixe outras de fora." });
+      }
+      if (words.length > MAX_WORD_OPTIONS) {
+        ctx.addIssue({ code: "custom", path: ["items", i, "text"], message: `Use no máximo ${MAX_WORD_OPTIONS} palavras.` });
+      }
       return;
     }
     if (item.type === "ordenar") {
@@ -494,6 +570,37 @@ function sheetPlayItems(items: SheetExercise[]): PlayItem[] {
             tiles: words.map((w, n) => ({ id: `w${n + 1}`, value: wordValue(w), label: w })),
             segments,
           },
+        },
+      ];
+    }
+    if (ex.type === "numero") {
+      return ex.questions.map((q, j) => ({
+        ...base,
+        key: questionKey(ex.key, q.id),
+        options: [],
+        correctId: "",
+        noMarkers: true,
+        typed: { expression: q.expression, answer: q.answer },
+        stimulus: freeStimulus(ex.support, j === 0 ? ex.supportIcon : undefined, j === 0 ? ex.supportImage : undefined),
+        exercise: { ...exercise, part: { index: j + 1, total: ex.questions.length, label: "Conta" } },
+      }));
+    }
+    if (ex.type === "marcartexto") {
+      const words = parseMarkedWords(ex.text);
+      const options = words.map((w, n) => ({ id: `w${n + 1}`, label: w.label }));
+      const correctIds = options.filter((_, n) => words[n]!.correct).map((o) => o.id);
+      return [
+        {
+          ...base,
+          key: ex.key,
+          options,
+          correctId: correctIds[0] ?? "",
+          correctIds,
+          words: true,
+          noMarkers: true,
+          fixedOrder: true,
+          stimulus: freeStimulus(ex.support, ex.supportIcon, ex.supportImage),
+          exercise,
         },
       ];
     }

@@ -92,8 +92,9 @@ export function answer(
   }
 
   const redirects = state.redirects + 1;
-  const markerHint = state.markerHint || redirects >= REDIRECTS_BEFORE_MARKER_HINT;
-  const visualHint = state.visualHint || redirects >= REDIRECTS_BEFORE_HIGHLIGHT;
+  // Sem marcadores (conta digitada, palavras do texto), o destaque entra no lugar do degrau do marcador.
+  const markerHint = !item.noMarkers && (state.markerHint || redirects >= REDIRECTS_BEFORE_MARKER_HINT);
+  const visualHint = state.visualHint || redirects >= (item.noMarkers ? REDIRECTS_BEFORE_MARKER_HINT : REDIRECTS_BEFORE_HIGHLIGHT);
   return {
     state: {
       ...state,
@@ -102,7 +103,7 @@ export function answer(
       redirects,
       markerHint,
       visualHint,
-      help: markerHint ? maxHelp(state.help, "VISUAL_HINT") : state.help,
+      help: markerHint || visualHint ? maxHelp(state.help, "VISUAL_HINT") : state.help,
     },
     attempt,
   };
@@ -129,7 +130,7 @@ export function requestHint(item: PlayItem, current: ItemState): ItemState {
   if (!state.hintShown && item.hint) {
     return { ...state, hintShown: true, help: maxHelp(state.help, "VERBAL_HINT") };
   }
-  if (!state.markerHint) {
+  if (!state.markerHint && !item.noMarkers) {
     return { ...state, markerHint: true, help: maxHelp(state.help, "VISUAL_HINT") };
   }
   return { ...state, visualHint: true, help: maxHelp(state.help, "VISUAL_HINT") };
