@@ -14,6 +14,6 @@ export const imageAltSchema = z
 export const imageUploadSchema = z
   .object({
     alt: imageAltSchema,
-    confirmo: z.literal("sim", { errorMap: () => ({ message: "Confirme que a imagem não mostra alunos." }) }),
+    confirmo: z.literal("sim", { error: "Confirme que a imagem não mostra alunos." }),
   })
   .strict();

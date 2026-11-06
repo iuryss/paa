@@ -20,7 +20,7 @@ Princípios inegociáveis:
 
 ## 2. Stack
 
-Next.js 15.5 (App Router, Server Actions) · React 19 · TypeScript · Tailwind 3 · estilo ShadCN + Lucide · Zod · Prisma 6 + PostgreSQL 16 · Auth.js v5 (sessão JWT, cookies HttpOnly) · Jest + Testing Library + jest-axe · Playwright + axe · nodemailer · GitHub Actions · Docker.
+Next.js 15.5 (App Router, Server Actions) · React 19 · TypeScript · Tailwind 3 · estilo ShadCN + Lucide · Zod 4 · Prisma 6 + PostgreSQL 16 · Auth.js v5 (sessão JWT, cookies HttpOnly) · Jest + Testing Library + jest-axe · Playwright + axe · nodemailer 10 · GitHub Actions · Docker.
 
 Design: veio de um artefato no Claude Design e foi copiado para `design/` (`tokens.json` e README). `src/styles/tokens.css` é **gerado** por `npm run tokens`. Nunca edite o CSS gerado à mão.
 
@@ -109,6 +109,7 @@ Provedores: `console` (só desenvolvimento), `gmail` (SMTP do Gmail com **senha 
 
 ## 10. Pendências e limitações conhecidas
 
+- **Dependências:** `npm audit --omit=dev` está em 0. Restam 6 alertas baixos só no Jest (`deepmerge`, sem versão corrigida). `overrides` no `package.json`: o `next-auth` declara nodemailer até a versão 8, mas está forçado para a 10 porque o login usa só credenciais e não passa pelo nodemailer; ao atualizar o `next-auth`, conferir se a regra ainda é necessária. O `minimatch` do `@typescript-eslint` também está forçado para a 11. O envio pelo Gmail real com o nodemailer 10 precisa ser confirmado após o deploy.
 - **Testes com serviços reais:** Gmail e Upstash foram testados só contra servidores simulados. O usuário diz que funcionam em produção.
 - `CRON_SECRET` já configurado na Vercel.
 - **Textos legais** ainda estão como "Versão de trabalho" até a escola/jurista aprovar; depois, `LEGAL_REVIEWED=true`.
