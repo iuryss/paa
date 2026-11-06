@@ -96,6 +96,9 @@ export function isCorrectOption(item: PlayItem, optionId: string): boolean {
   return item.correctIds ? item.correctIds.includes(optionId) : optionId === item.correctId;
 }
 
+export const ORDER_MODES = ["letras", "palavras", "passos"] as const;
+export type OrderMode = (typeof ORDER_MODES)[number];
+
 /** Algo que vira peça ou item de coluna: texto sempre, figura e imagem opcionais. */
 export interface PlaceCard {
   label: string;
@@ -104,7 +107,7 @@ export interface PlaceCard {
 }
 
 export interface PlacePlay {
-  mode: "lacunas" | "ligar";
+  mode: "lacunas" | "ligar" | "ordenar" | "nomear" | "classificar";
   /** Uma casa por lacuna (ou por item da esquerda), na ordem em que são preenchidas. */
   slots: { key: string; expected: string }[];
   /** As peças: palavras do banco (lacunas) ou os itens da direita (ligar). */
@@ -113,6 +116,12 @@ export interface PlacePlay {
   segments?: (string | null)[];
   /** Ligar: os itens da esquerda, na ordem das casas. */
   left?: PlaceCard[];
+  /** Ordenar: letras (lado a lado, sem espaço), palavras (formando a frase) ou passos (lista numerada). */
+  order?: OrderMode;
+  /** Nomear: a figura de cada casa (o nome é a resposta, então não vem aqui). */
+  figures?: { icon?: IconName; image?: ImageRef }[];
+  /** Classificar: o cartão de cada casa, na ordem em que aparecem. As peças são as caixas. */
+  cards?: PlaceCard[];
 }
 
 /**
@@ -187,11 +196,18 @@ export const MAX_SHEET_TEXT = 800;
 export const MAX_EXAMPLE_TEXT = 300;
 export const MAX_SHEET_EXERCISES = 12;
 export const MAX_STATEMENTS = 6;
-export const EXERCISE_TYPES = ["escolha", "marcar", "vf", "lacunas", "ligar"] as const;
+export const EXERCISE_TYPES = ["escolha", "marcar", "vf", "lacunas", "ligar", "ordenar", "nomear", "classificar"] as const;
 export const MAX_GAPS = 8;
 export const MAX_EXTRA_WORDS = 6;
 export const MIN_PAIRS = 2;
 export const MAX_PAIRS = 5;
+export const MIN_PIECES = 2;
+export const MAX_PIECES = 12;
+export const MAX_FIGURES = 6;
+export const MAX_NAME_EXTRAS = 4;
+export const MIN_GROUPS = 2;
+export const MAX_GROUPS = 4;
+export const MAX_CARDS = 10;
 
 /** "A matéria tem [massa] e [volume]." → pedaços do texto e as palavras escondidas. */
 export function parseGaps(textWithGaps: string): { segments: (string | null)[]; answers: string[] } {
@@ -213,6 +229,10 @@ export const wordValue = (word: string) => word.trim().toLocaleLowerCase("pt-BR"
 /** Chave de telemetria de cada lacuna e de cada par: "item-2-l1", "item-3-p1". */
 export const gapKey = (exerciseKey: string, index: number) => `${exerciseKey}-l${index + 1}`;
 export const pairKey = (exerciseKey: string, pairId: string) => `${exerciseKey}-${pairId}`;
+/** Chaves de ordenar, nomear e classificar: "item-2-o1", "item-3-n1", "item-4-c1". */
+export const orderKey = (exerciseKey: string, index: number) => `${exerciseKey}-o${index + 1}`;
+export const figureKey = (exerciseKey: string, index: number) => `${exerciseKey}-n${index + 1}`;
+export const cardKey = (exerciseKey: string, cardId: string) => `${exerciseKey}-${cardId}`;
 export type ExerciseType = (typeof EXERCISE_TYPES)[number];
 
 /** Bloco de apoio no topo da folha. `**palavra**` no texto vira destaque. */
@@ -266,6 +286,39 @@ const sheetExercise = z.discriminatedUnion("type", [
       extras: z.array(text(30)).max(MAX_EXTRA_WORDS).default([]),
     })
     .strict(),
+  /** Ordenar: peças na ordem certa (letras de uma palavra, palavras de uma frase ou passos). */
+  z
+    .object({
+      type: z.literal("ordenar"),
+      ...exerciseBase,
+      order: z.enum(ORDER_MODES),
+      pieces: z.array(text(60)).min(MIN_PIECES).max(MAX_PIECES),
+    })
+    .strict(),
+  /** Nomear imagens: cada figura com a sua palavra; as palavras vão para o banco, com as extras. */
+  z
+    .object({
+      type: z.literal("nomear"),
+      ...exerciseBase,
+      figures: z
+        .array(z.object({ icon: icon.optional(), image: imageRef.optional(), answer: text(30) }).strict())
+        .min(MIN_PAIRS)
+        .max(MAX_FIGURES),
+      extras: z.array(text(30)).max(MAX_NAME_EXTRAS).default([]),
+    })
+    .strict(),
+  /** Classificar: cada cartão vai para a sua caixa (vários para um). */
+  z
+    .object({
+      type: z.literal("classificar"),
+      ...exerciseBase,
+      groups: z.array(z.object({ id: slug, ...pairSide.shape }).strict()).min(MIN_GROUPS).max(MAX_GROUPS),
+      cards: z
+        .array(z.object({ id: slug, group: slug, ...pairSide.shape }).strict())
+        .min(MIN_PAIRS)
+        .max(MAX_CARDS),
+    })
+    .strict(),
   /** Ligar pares (um para um): cada item da esquerda com o seu par da direita. */
   z
     .object({
@@ -310,6 +363,44 @@ function checkSheet({ items }: { items: SheetExercise[] }, ctx: z.RefinementCtx)
         ctx.addIssue({ code: "custom", path: ["items", i, "extras"], message: "Palavras extras repetidas ou iguais a uma resposta." });
       }
       answers.forEach((_, g) => addKey(gapKey(item.key, g), i));
+      return;
+    }
+    if (item.type === "ordenar") {
+      if (item.order === "letras" && item.pieces.some((piece) => [...piece].length !== 1)) {
+        ctx.addIssue({ code: "custom", path: ["items", i, "pieces"], message: "No modo letras, cada peça é uma letra." });
+      }
+      if (new Set(item.pieces.map(wordValue)).size < 2) {
+        ctx.addIssue({ code: "custom", path: ["items", i, "pieces"], message: "Com todas as peças iguais não há o que ordenar." });
+      }
+      item.pieces.forEach((_, n) => addKey(orderKey(item.key, n), i));
+      return;
+    }
+    if (item.type === "nomear") {
+      if (item.figures.some((f) => !f.icon && !f.image)) {
+        ctx.addIssue({ code: "custom", path: ["items", i, "figures"], message: "Cada item precisa de figura ou imagem." });
+      }
+      const answers = item.figures.map((f) => wordValue(f.answer));
+      const extras = item.extras.map(wordValue);
+      if (new Set(answers).size !== answers.length || new Set([...answers, ...extras]).size !== answers.length + extras.length) {
+        ctx.addIssue({ code: "custom", path: ["items", i, "figures"], message: "Palavras repetidas." });
+      }
+      item.figures.forEach((_, n) => addKey(figureKey(item.key, n), i));
+      return;
+    }
+    if (item.type === "classificar") {
+      const groupIds = item.groups.map((g) => g.id);
+      const groupLabels = item.groups.map((g) => wordValue(g.label));
+      const cardIds = item.cards.map((c) => c.id);
+      if (new Set(groupIds).size !== groupIds.length || new Set(groupLabels).size !== groupLabels.length || new Set(cardIds).size !== cardIds.length) {
+        ctx.addIssue({ code: "custom", path: ["items", i], message: "Caixas ou cartões repetidos." });
+      }
+      if (item.cards.some((c) => !groupIds.includes(c.group))) {
+        ctx.addIssue({ code: "custom", path: ["items", i, "cards"], message: "Cartão numa caixa que não existe." });
+      }
+      if (groupIds.some((id) => !item.cards.some((c) => c.group === id))) {
+        ctx.addIssue({ code: "custom", path: ["items", i, "groups"], message: "Toda caixa precisa de pelo menos um cartão." });
+      }
+      cardIds.forEach((id) => addKey(cardKey(item.key, id), i));
       return;
     }
     if (item.type === "ligar") {
@@ -402,6 +493,54 @@ function sheetPlayItems(items: SheetExercise[]): PlayItem[] {
             // Ids pela ordem do conteúdo (respostas, depois extras): o servidor sabe qual palavra é cada peça.
             tiles: words.map((w, n) => ({ id: `w${n + 1}`, value: wordValue(w), label: w })),
             segments,
+          },
+        },
+      ];
+    }
+    if (ex.type === "ordenar" || ex.type === "nomear" || ex.type === "classificar") {
+      const step = {
+        ...base,
+        key: ex.key,
+        options: [],
+        correctId: "",
+        stimulus: freeStimulus(ex.support, ex.supportIcon, ex.supportImage),
+        exercise,
+      };
+      if (ex.type === "ordenar") {
+        return [
+          {
+            ...step,
+            place: {
+              mode: "ordenar",
+              order: ex.order,
+              slots: ex.pieces.map((piece, n) => ({ key: orderKey(ex.key, n), expected: wordValue(piece) })),
+              tiles: ex.pieces.map((piece, n) => ({ id: `t${n + 1}`, value: wordValue(piece), label: piece })),
+            },
+          },
+        ];
+      }
+      if (ex.type === "nomear") {
+        const words = [...ex.figures.map((f) => f.answer), ...ex.extras];
+        return [
+          {
+            ...step,
+            place: {
+              mode: "nomear",
+              slots: ex.figures.map((f, n) => ({ key: figureKey(ex.key, n), expected: wordValue(f.answer) })),
+              tiles: words.map((w, n) => ({ id: `w${n + 1}`, value: wordValue(w), label: w })),
+              figures: ex.figures.map((f) => ({ ...(f.icon ? { icon: f.icon } : {}), ...(f.image ? { image: f.image } : {}) })),
+            },
+          },
+        ];
+      }
+      return [
+        {
+          ...step,
+          place: {
+            mode: "classificar",
+            slots: ex.cards.map((c) => ({ key: cardKey(ex.key, c.id), expected: c.group })),
+            tiles: ex.groups.map((g) => ({ id: g.id, value: g.id, ...card(g) })),
+            cards: ex.cards.map((c) => card(c)),
           },
         },
       ];

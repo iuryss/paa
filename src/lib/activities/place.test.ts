@@ -134,3 +134,33 @@ describe("folha: lacunas e ligar pares", () => {
     ).toBe(false);
   });
 });
+
+describe("peças reutilizáveis (classificar)", () => {
+  const boxes: PlaceBoard = {
+    slots: [
+      { key: "item-1-c1", expected: "g1" },
+      { key: "item-1-c2", expected: "g1" },
+      { key: "item-1-c3", expected: "g2" },
+    ],
+    tiles: [
+      { id: "g1", value: "g1" },
+      { id: "g2", value: "g2" },
+    ],
+    canTell: false,
+    reusableTiles: true,
+  };
+
+  it("a mesma caixa recebe vários cartões, e o destaque continua apontando para ela", () => {
+    let s = placeOnBoard(boxes, initialPlaceState(boxes, 0), "g1", 1).state;
+    expect(hintedTile(boxes, s)?.id).toBe("g1");
+    const second = placeOnBoard(boxes, s, "g1", 2);
+    expect(second.attempt).toMatchObject({ itemKey: "item-1-c2", correct: true });
+    s = placeOnBoard(boxes, second.state, "g2", 3).state;
+    expect(s).toMatchObject({ status: "done", placed: ["g1", "g1", "g2"] });
+  });
+
+  it("sem o modo reutilizável, a peça usada continua fora do jogo", () => {
+    const s = placeOnBoard(board, initialPlaceState(board, 0), "w1", 1).state;
+    expect(placeOnBoard(board, s, "w1", 2).attempt).toBeNull();
+  });
+});
