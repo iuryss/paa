@@ -287,6 +287,61 @@ async function main() {
     create: { activityId: organizar.id, studentId: student.id, assignedBy: teacher.id },
   });
 
+  // Folha de matemática: notação, conta digitada e marcar no texto (sem sessões, para ficar editável).
+  const potencias = {
+    id: "seed-potencias",
+    module: "FOLHA" as const,
+    title: "Potências e frações",
+    instruction: "Leia o exemplo e resolva",
+    content: {
+      support: {
+        text: "Uma **potência** é uma multiplicação repetida. O número de cima diz quantas vezes multiplicar.",
+        example: "Ex.: 2^3 = 2 × 2 × 2 = 8",
+      },
+      items: [
+        {
+          type: "numero",
+          key: "item-1",
+          prompt: "Resolva as contas",
+          hint: "Multiplique o número por ele mesmo.",
+          questions: [
+            { id: "q1", expression: "2^3", answer: "8" },
+            { id: "q2", expression: "3^2", answer: "9" },
+            { id: "q3", expression: "1/2 + 1/4", answer: "3/4" },
+          ],
+        },
+        {
+          type: "marcartexto",
+          key: "item-2",
+          prompt: "Toque nas palavras que falam de potência",
+          hint: "Procure no texto de cima.",
+          text: "A [potência] tem [base] e [expoente] e fica no caderno.",
+        },
+        {
+          type: "escolha",
+          key: "item-3",
+          prompt: "Quanto é raiz(9)?",
+          options: [
+            { id: "o-3", label: "3" },
+            { id: "o-9", label: "9" },
+            { id: "o-meio", label: "1/2" },
+          ],
+          correctId: "o-3",
+        },
+      ],
+    },
+  };
+  await prisma.activity.upsert({
+    where: { id: potencias.id },
+    update: { content: potencias.content, title: potencias.title, instruction: potencias.instruction, published: true },
+    create: { ...potencias, published: true, authorId: teacher.id },
+  });
+  await prisma.assignment.upsert({
+    where: { activityId_studentId: { activityId: potencias.id, studentId: student.id } },
+    update: {},
+    create: { activityId: potencias.id, studentId: student.id, assignedBy: teacher.id },
+  });
+
   // Escrever o nome: só a configuração; as letras vêm do apelido de cada aluno ("Sol").
   const nome = {
     id: "seed-nome",
@@ -348,7 +403,7 @@ async function main() {
     });
   }
 
-  console.log("Seed concluído (professor, aluno, 7 atividades e 8 sessões de demonstração).");
+  console.log("Seed concluído (professor, aluno, 8 atividades e 8 sessões de demonstração).");
 }
 
 main()

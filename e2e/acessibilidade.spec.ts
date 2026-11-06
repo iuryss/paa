@@ -123,6 +123,22 @@ for (const theme of THEMES) {
       await expect(page.getByText("Cartão 1 de 3")).toBeVisible();
       await scan(page, "Organizar: separar", findings);
 
+      // Potências: teclado de números com a notação na tela, e as palavras do texto.
+      await openActivity(page, "Potências");
+      await expect(page.getByRole("group", { name: "Teclado de números" })).toBeVisible();
+      await scan(page, "Potências: teclado de números", findings);
+      await page.getByRole("group", { name: "Teclado de números" }).getByRole("button", { name: "8", exact: true }).click();
+      await page.getByRole("button", { name: "Pronto" }).click();
+      await page.getByRole("button", { name: "Continuar" }).click();
+      await page.getByRole("group", { name: "Teclado de números" }).getByRole("button", { name: "1", exact: true }).click();
+      await page.getByRole("group", { name: "Teclado de números" }).getByRole("button", { name: "barra de fração" }).click();
+      await page.getByRole("group", { name: "Teclado de números" }).getByRole("button", { name: "2", exact: true }).click();
+      await page.getByRole("button", { name: "Pronto" }).click();
+      await page.getByRole("button", { name: "Continuar" }).click();
+      await page.getByRole("group", { name: "Palavras do texto" }).getByRole("button", { name: "base" }).click();
+      await expect(page.getByRole("group", { name: "Palavras do texto" }).getByRole("button", { name: "base" })).toHaveAttribute("aria-pressed", "true");
+      await scan(page, "Potências: marcar no texto", findings);
+
       // Escrever o nome: quadro inicial, dica com modelo, peça em destaque e uma letra colocada.
       await openActivity(page, "Meu nome");
       const letters = page.getByRole("group", { name: "Letras" });
