@@ -4,10 +4,16 @@ import {
   DIRECTIONS,
   ICON_NAMES,
   MAX_EXAMPLE_TEXT,
+  MAX_CARDS,
+  MAX_FIGURES,
   MAX_GAPS,
+  MAX_GROUPS,
   MAX_PAIRS,
+  MAX_PIECES,
   MAX_SHEET_EXERCISES,
+  MIN_GROUPS,
   MIN_PAIRS,
+  MIN_PIECES,
   parseGaps,
   wordValue,
   MAX_SHEET_TEXT,
@@ -17,6 +23,7 @@ import {
   type ExerciseType,
   type IconName,
   type ImageRef,
+  type OrderMode,
   type SheetSupport,
   type SupportedModule,
 } from "@/lib/validation/activities";
@@ -48,7 +55,28 @@ export const EXERCISE_LABEL: Record<ExerciseType, string> = {
   vf: "Verdadeiro ou falso",
   lacunas: "Completar lacunas",
   ligar: "Ligar pares",
+  ordenar: "Colocar em ordem",
+  nomear: "Nomear imagens",
+  classificar: "Separar em grupos",
 };
+
+export const ORDER_MODE_LABEL: Record<OrderMode, string> = {
+  letras: "Letras de uma palavra",
+  palavras: "Palavras de uma frase",
+  passos: "Passos (um por linha)",
+};
+
+/** Nomear imagens: a figura (ícone ou imagem) e a palavra certa. */
+export interface EditorFigure {
+  icon: IconName | "";
+  image: ImageRef | null;
+  answer: string;
+}
+
+/** Separar em grupos: o cartão e o índice da caixa onde ele fica. */
+export interface EditorCard extends EditorAnswer {
+  group: number;
+}
 
 /** Ligar pares: o item da esquerda e o seu par da direita (texto, figura e imagem, como as respostas). */
 export interface EditorPair {
@@ -87,6 +115,14 @@ export interface EditorItem {
   extras: string[];
   /** Ligar pares: de 2 a 5. */
   pairs: EditorPair[];
+  /** Colocar em ordem: o tipo de peça e o texto na ordem certa. */
+  orderMode: OrderMode;
+  orderText: string;
+  /** Nomear imagens: as figuras (usa `extras` para as palavras a mais). */
+  figures: EditorFigure[];
+  /** Separar em grupos: as caixas e os cartões. */
+  groups: EditorAnswer[];
+  cards: EditorCard[];
   prompt: string;
   hint: string;
   /** Grafia e Matemática: de 1 a 3 opções erradas. */
@@ -161,6 +197,40 @@ const emptyAnswer = (): EditorAnswer => ({ label: "", icon: "", image: null });
 const emptyStatement = (): EditorStatement => ({ text: "", correct: true });
 const emptyPair = (): EditorPair => ({ left: emptyAnswer(), right: emptyAnswer() });
 
+const emptyFigure = (): EditorFigure => ({ icon: "", image: null, answer: "" });
+const emptyCard = (group: number): EditorCard => ({ ...emptyAnswer(), group });
+
+export function addFigure(item: EditorItem): EditorItem {
+  if (item.figures.length >= MAX_FIGURES) return item;
+  return { ...item, figures: [...item.figures, emptyFigure()] };
+}
+
+export function addGroup(item: EditorItem): EditorItem {
+  if (item.groups.length >= MAX_GROUPS) return item;
+  return { ...item, groups: [...item.groups, emptyAnswer()] };
+}
+
+export function addCard(item: EditorItem): EditorItem {
+  if (item.cards.length >= MAX_CARDS) return item;
+  return { ...item, cards: [...item.cards, emptyCard(0)] };
+}
+
+/** Remove uma caixa: os cartões dela passam para a 1ª caixa, e os índices das seguintes se ajustam. */
+export function removeGroup(item: EditorItem, index: number): EditorItem {
+  return {
+    ...item,
+    groups: item.groups.filter((_, i) => i !== index),
+    cards: item.cards.map((c) => ({ ...c, group: c.group === index ? 0 : c.group > index ? c.group - 1 : c.group })),
+  };
+}
+
+/** O texto do professor vira as peças, na ordem certa. */
+export function orderPieces(mode: OrderMode, text: string): string[] {
+  if (mode === "letras") return [...text.replace(/\s/g, "")];
+  if (mode === "palavras") return text.split(/\s+/).filter(Boolean);
+  return text.split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
 export function addPair(item: EditorItem): EditorItem {
   if (item.pairs.length >= MAX_PAIRS) return item;
   return { ...item, pairs: [...item.pairs, emptyPair()] };
@@ -182,6 +252,11 @@ export function emptyItem(module: SupportedModule, exType: ExerciseType = "escol
     gapText: "",
     extras: [],
     pairs: [],
+    orderMode: "palavras",
+    orderText: "",
+    figures: [],
+    groups: [],
+    cards: [],
     prompt: "",
     hint: "",
     distractors: [],
@@ -199,6 +274,11 @@ export function emptyItem(module: SupportedModule, exType: ExerciseType = "escol
     if (exType === "vf") return { ...base, prompt: "É verdadeiro ou falso?", statements: [emptyStatement(), emptyStatement()] };
     if (exType === "lacunas") return { ...base, prompt: "Complete com as palavras", extras: [""] };
     if (exType === "ligar") return { ...base, prompt: "Ligue cada um ao seu par", pairs: [emptyPair(), emptyPair()] };
+    if (exType === "ordenar") return { ...base, prompt: "Coloque na ordem certa" };
+    if (exType === "nomear") return { ...base, prompt: "Dê o nome de cada figura", figures: [emptyFigure(), emptyFigure()] };
+    if (exType === "classificar") {
+      return { ...base, prompt: "Separe nas caixas", groups: [emptyAnswer(), emptyAnswer()], cards: [emptyCard(0), emptyCard(1)] };
+    }
     if (exType === "marcar") return { ...base, answers: [emptyAnswer(), emptyAnswer(), emptyAnswer()], correctSet: [0] };
     return { ...base, answers: [emptyAnswer(), emptyAnswer()] };
   }
@@ -288,6 +368,36 @@ function exerciseToContent(item: EditorItem, common: Record<string, unknown>) {
     ...(item.supportIcon ? { supportIcon: item.supportIcon } : {}),
     ...(item.supportImage ? { supportImage: cleanImage(item.supportImage) } : {}),
   };
+  const side = (a: EditorAnswer) => ({
+    label: a.label.trim(),
+    ...(a.icon ? { icon: a.icon } : {}),
+    ...(a.image ? { image: cleanImage(a.image) } : {}),
+  });
+  if (item.exType === "ordenar") {
+    return { type: "ordenar", ...common, ...support, order: item.orderMode, pieces: orderPieces(item.orderMode, item.orderText) };
+  }
+  if (item.exType === "nomear") {
+    return {
+      type: "nomear",
+      ...common,
+      ...support,
+      figures: item.figures.map((f) => ({
+        ...(f.icon ? { icon: f.icon } : {}),
+        ...(f.image ? { image: cleanImage(f.image) } : {}),
+        answer: f.answer.trim(),
+      })),
+      extras: item.extras.map((w) => w.trim()).filter(Boolean),
+    };
+  }
+  if (item.exType === "classificar") {
+    return {
+      type: "classificar",
+      ...common,
+      ...support,
+      groups: item.groups.map((g, j) => ({ id: `g${j + 1}`, ...side(g) })),
+      cards: item.cards.map((c, j) => ({ id: `c${j + 1}`, group: `g${c.group + 1}`, ...side(c) })),
+    };
+  }
   if (item.exType === "lacunas") {
     return {
       type: "lacunas",
@@ -298,11 +408,6 @@ function exerciseToContent(item: EditorItem, common: Record<string, unknown>) {
     };
   }
   if (item.exType === "ligar") {
-    const side = (a: EditorAnswer) => ({
-      label: a.label.trim(),
-      ...(a.icon ? { icon: a.icon } : {}),
-      ...(a.image ? { image: cleanImage(a.image) } : {}),
-    });
     return {
       type: "ligar",
       ...common,
@@ -402,6 +507,11 @@ interface StoredItem {
   text?: string;
   extras?: string[];
   pairs?: { id: string; left: StoredCard; right: StoredCard }[];
+  order?: OrderMode;
+  pieces?: string[];
+  figures?: { icon?: IconName; image?: ImageRef; answer: string }[];
+  groups?: (StoredCard & { id: string })[];
+  cards?: (StoredCard & { id: string; group: string })[];
   extraLetters?: number;
   letterCase?: LetterCase;
   showModel?: boolean;
@@ -444,6 +554,14 @@ export function fromContent(module: SupportedModule, content: unknown): EditorIt
       gapText: s.text ?? "",
       extras: s.extras ?? [],
       pairs: (s.pairs ?? []).map((pr) => ({ left: storedCard(pr.left), right: storedCard(pr.right) })),
+      orderMode: s.order ?? "palavras",
+      orderText: (s.pieces ?? []).join(s.order === "letras" ? "" : s.order === "passos" ? "\n" : " "),
+      figures: (s.figures ?? []).map((f) => ({ icon: f.icon ?? "", image: f.image ?? null, answer: f.answer })),
+      groups: (s.groups ?? []).map(storedCard),
+      cards: (s.cards ?? []).map((c) => ({
+        ...storedCard(c),
+        group: Math.max(0, (s.groups ?? []).findIndex((g) => g.id === c.group)),
+      })),
       display: s.display ?? "",
       a: s.a ?? 1,
       b: s.b ?? 1,
@@ -502,6 +620,49 @@ export function validateItems(module: SupportedModule, items: EditorItem[]): str
           errors.push(`${n}: uma palavra extra é igual a uma resposta (ela também valeria).`);
         }
         if (new Set(extras.map(wordValue)).size !== extras.length) errors.push(`${n}: há palavras extras repetidas.`);
+        return;
+      }
+      if (item.exType === "ordenar") {
+        const pieces = orderPieces(item.orderMode, item.orderText);
+        if (pieces.length < MIN_PIECES || pieces.length > MAX_PIECES) {
+          errors.push(`${n}: use de ${MIN_PIECES} a ${MAX_PIECES} peças para ordenar.`);
+        } else if (new Set(pieces.map(wordValue)).size < 2) {
+          errors.push(`${n}: com todas as peças iguais não há o que ordenar.`);
+        }
+        if (pieces.some((piece) => piece.length > 60)) errors.push(`${n}: cada peça pode ter até 60 letras.`);
+        return;
+      }
+      if (item.exType === "nomear") {
+        if (item.figures.length < MIN_PAIRS || item.figures.length > MAX_FIGURES) {
+          errors.push(`${n}: use de ${MIN_PAIRS} a ${MAX_FIGURES} figuras.`);
+        }
+        item.figures.forEach((f, j) => {
+          if (!f.icon && !f.image) errors.push(`${n}: escolha a figura ou imagem ${j + 1}.`);
+          if (!f.answer.trim()) errors.push(`${n}: escreva o nome da figura ${j + 1}.`);
+          if (f.image && f.image.alt.trim().length < 3) errors.push(`${n}: descreva cada imagem (para quem não enxerga).`);
+        });
+        const words = [...item.figures.map((f) => f.answer), ...item.extras].map(wordValue).filter(Boolean);
+        if (new Set(words).size !== words.length) errors.push(`${n}: há palavras repetidas.`);
+        return;
+      }
+      if (item.exType === "classificar") {
+        if (item.groups.length < MIN_GROUPS || item.groups.length > MAX_GROUPS) {
+          errors.push(`${n}: use de ${MIN_GROUPS} a ${MAX_GROUPS} caixas.`);
+        }
+        if (item.cards.length < MIN_PAIRS || item.cards.length > MAX_CARDS) {
+          errors.push(`${n}: use de ${MIN_PAIRS} a ${MAX_CARDS} cartões.`);
+        }
+        item.groups.forEach((g, j) => {
+          if (!g.label.trim()) errors.push(`${n}: escreva o nome da caixa ${j + 1}.`);
+          else if (!item.cards.some((c) => c.group === j)) errors.push(`${n}: a caixa ${j + 1} não tem nenhum cartão.`);
+        });
+        item.cards.forEach((c, j) => {
+          if (!c.label.trim()) errors.push(`${n}: escreva o cartão ${j + 1}.`);
+        });
+        const labels = item.groups.map((g) => wordValue(g.label)).filter(Boolean);
+        if (new Set(labels).size !== labels.length) errors.push(`${n}: há caixas repetidas.`);
+        const images = [...item.groups, ...item.cards].map((c) => c.image).filter((img): img is ImageRef => img !== null);
+        if (images.some((img) => img.alt.trim().length < 3)) errors.push(`${n}: descreva cada imagem (para quem não enxerga).`);
         return;
       }
       if (item.exType === "ligar") {
