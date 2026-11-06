@@ -354,6 +354,32 @@ describe("ActivityEditor — itens", () => {
     });
   }, 20_000); // muita digitação simulada
 
+  it("Folha: resposta em número (com prévia da notação) e marcar no texto", async () => {
+    reply(201, { id: "folha88888" });
+    const user = userEvent.setup();
+    setup("FOLHA", {
+      initial: { title: "", instruction: "", difficulty: "INICIAL", published: false, items: [emptyItem("FOLHA", "numero")] },
+    });
+    await fillMeta(user);
+
+    const ex1 = within(screen.getByRole("group", { name: "Exercício 1" }));
+    await user.type(ex1.getByLabelText("Texto da conta 1"), "2^3");
+    expect(ex1.getByText(/A criança vê:/)).toHaveTextContent("2 elevado a 3");
+    await user.type(ex1.getByLabelText("Resposta certa da conta 1"), "8");
+
+    await user.click(screen.getByRole("button", { name: "Marcar no texto" }));
+    const ex2 = within(screen.getByRole("group", { name: "Exercício 2" }));
+    expect(ex2.getByText("Nenhuma palavra marcada ainda.")).toBeInTheDocument();
+    await user.type(ex2.getByLabelText("Texto com as palavras certas"), "O [[gelo] é água.");
+    expect(ex2.getByText("Palavras certas (1): gelo")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const items = JSON.parse(fetchMock.mock.calls[0]![1].body).content.items;
+    expect(items[0]).toMatchObject({ type: "numero", questions: [{ id: "q1", expression: "2^3", answer: "8" }] });
+    expect(items[1]).toMatchObject({ type: "marcartexto", text: "O [gelo] é água." });
+  }, 20_000); // muita digitação simulada
+
   it("Folha: resposta vazia e destaque aberto são apontados antes de salvar", async () => {
     const user = userEvent.setup();
     setup("FOLHA", {
