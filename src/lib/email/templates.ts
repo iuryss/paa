@@ -51,3 +51,17 @@ export function invitationEmail(args: {
     html: layout("Você foi convidado(a)", [intro, validity], args.link, "Criar minha conta", footer),
   };
 }
+
+/** Sem o apelido da criança: o e-mail sai do nosso sistema e o colega vê o aluno ao entrar. */
+export function studentSharedEmail(args: { to: string; name: string; actorName: string; link: string }): EmailMessage {
+  const subject = "Novo aluno no seu painel - Plataforma TEA";
+  const intro = `Olá, ${args.name}. ${args.actorName} adicionou você ao acompanhamento de um aluno.`;
+  const next = "Entre na plataforma para ver o aluno no seu painel.";
+  const footer = "Se você não esperava este aviso, fale com a coordenação da escola.";
+  return {
+    to: args.to,
+    subject,
+    text: `${intro}\n\n${next}\n${args.link}\n\n${footer}\n`,
+    html: layout("Novo aluno no seu painel", [intro, next], args.link, "Abrir o painel", footer),
+  };
+}

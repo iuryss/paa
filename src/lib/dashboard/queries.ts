@@ -1,3 +1,4 @@
+import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { closeStaleSessions } from "@/lib/telemetry";
 import {
@@ -162,6 +163,34 @@ export interface StudentReport {
   summary: StudentSummary;
   byModule: ModuleSummary[];
   assignable: { id: string; title: string; module: string }[];
+  /** Adultos que acompanham o aluno, do vínculo mais antigo ao mais novo. */
+  team: StudentTeamMember[];
+  /** O que já foi atribuído, e por quem, para os colegas não repetirem o trabalho. */
+  assigned: AssignedActivity[];
+}
+
+export interface StudentTeamMember {
+  id: string;
+  displayName: string;
+  role: Role;
+}
+
+export interface AssignedActivity {
+  id: string;
+  title: string;
+  module: string;
+  assignedAt: Date;
+  assignedByName: string;
+  assignedByYou: boolean;
+}
+
+async function teamOfStudent(studentId: string): Promise<StudentTeamMember[]> {
+  const links = await prisma.guidance.findMany({
+    where: { studentId },
+    orderBy: { createdAt: "asc" },
+    select: { adult: { select: { id: true, displayName: true, role: true } } },
+  });
+  return links.map((l) => l.adult);
 }
 
 /** Relatório de evolução de um aluno. Retorna null se o adulto não acompanha esse aluno. */
@@ -184,9 +213,12 @@ export async function getStudentReport(
     await prisma.auditLog.create({
       data: { actorId: adultId, action: "student.report.read", targetId: studentId },
     });
+    const team = await teamOfStudent(studentId);
     return {
       student,
-      otherAdults: await prisma.guidance.count({ where: { studentId, adultId: { not: adultId } } }),
+      otherAdults: team.length - 1,
+      team,
+      assigned: [],
       days,
       sessions: [],
       interrupted: [],
@@ -198,7 +230,7 @@ export async function getStudentReport(
 
   await closeStaleSessions({ now, studentIds: [studentId] });
 
-  const [sessions, interrupted, published, assigned, otherAdults] = await Promise.all([
+  const [sessions, interrupted, published, assignments, team] = await Promise.all([
     metricsForStudent(studentId, days, now),
     interruptedForStudent(studentId, days, now),
     prisma.activity.findMany({
@@ -206,18 +238,39 @@ export async function getStudentReport(
       orderBy: { title: "asc" },
       select: { id: true, title: true, module: true },
     }),
-    prisma.assignment.findMany({ where: { studentId }, select: { activityId: true } }),
-    prisma.guidance.count({ where: { studentId, adultId: { not: adultId } } }),
+    prisma.assignment.findMany({
+      where: { studentId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        activityId: true,
+        assignedBy: true,
+        createdAt: true,
+        activity: { select: { title: true, module: true, published: true } },
+        assigner: { select: { displayName: true } },
+      },
+    }),
+    teamOfStudent(studentId),
   ]);
 
   await prisma.auditLog.create({
     data: { actorId: adultId, action: "student.report.read", targetId: studentId },
   });
 
-  const taken = new Set(assigned.map((a) => a.activityId));
+  const taken = new Set(assignments.map((a) => a.activityId));
   return {
     student,
-    otherAdults,
+    otherAdults: team.length - 1,
+    team,
+    assigned: assignments
+      .filter((a) => a.activity.published)
+      .map((a) => ({
+        id: a.activityId,
+        title: a.activity.title,
+        module: a.activity.module,
+        assignedAt: a.createdAt,
+        assignedByName: a.assigner.displayName,
+        assignedByYou: a.assignedBy === adultId,
+      })),
     days,
     sessions,
     interrupted,

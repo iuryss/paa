@@ -20,7 +20,14 @@ const student = {
   createdAt: d("2026-09-01T10:00:00Z"),
   sensoryProfile: { theme: "CALMO", contentMode: "TEXTUAL", fontFamily: "SANS", reducedMotion: true, soundEnabled: false },
   consents: [{ termsVersion: "2026.1", status: "GRANTED", createdAt: d("2026-09-01T10:00:00Z"), revokedAt: null }],
-  assignments: [{ createdAt: d("2026-09-02T10:00:00Z"), activity: { title: "Letras", module: "GRAFIA" } }],
+  guidances: [{ createdAt: d("2026-09-01T10:00:00Z"), adult: { displayName: "Ana", role: "TEACHER" } }],
+  assignments: [
+    {
+      createdAt: d("2026-09-02T10:00:00Z"),
+      activity: { title: "Letras", module: "GRAFIA" },
+      assigner: { displayName: "Ana" },
+    },
+  ],
   sessions: [
     {
       startedAt: d("2026-10-01T10:00:00Z"),
@@ -61,8 +68,11 @@ describe("exportStudentData", () => {
     expect(result.data.consentimentos).toEqual([
       { versaoDoTermo: "2026.1", situacao: "GRANTED", registradoEm: "2026-09-01T10:00:00.000Z", revogadoEm: null },
     ]);
+    expect(result.data.profissionais).toEqual([
+      { nome: "Ana", papel: "TEACHER", vinculadoEm: "2026-09-01T10:00:00.000Z" },
+    ]);
     expect(result.data.atividadesAtribuidas).toEqual([
-      { atividade: "Letras", modulo: "GRAFIA", atribuidaEm: "2026-09-02T10:00:00.000Z" },
+      { atividade: "Letras", modulo: "GRAFIA", atribuidaEm: "2026-09-02T10:00:00.000Z", atribuidaPor: "Ana" },
     ]);
     expect(result.data.sessoes[0]).toMatchObject({ tentativas: 2, acertos: 1, redirecionamentos: 1, maiorAjuda: "VERBAL_HINT" });
     expect(result.data.sessoes[0]!.respostas).toHaveLength(2);

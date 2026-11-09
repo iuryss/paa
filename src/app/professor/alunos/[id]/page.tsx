@@ -10,6 +10,7 @@ import { PeriodNav } from "@/components/dashboard/period-nav";
 import { ResetPinCard } from "@/components/dashboard/reset-pin-card";
 import { StudentPrivacyCard } from "@/components/dashboard/student-privacy-card";
 import { StudentProfileForm } from "@/components/dashboard/student-profile-form";
+import { StudentTeamCard } from "@/components/dashboard/student-team-card";
 import { loadPreferences } from "@/lib/preferences";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -50,7 +51,16 @@ export default async function AlunoReportPage({
   const report = await getStudentReport(session.user.id, id, days);
   if (!report) notFound(); // sem vínculo = não existe (não confirma que o aluno existe)
 
-  const { student, sessions, interrupted, summary, byModule, assignable, otherAdults } = report;
+  const { student, sessions, interrupted, summary, byModule, assignable, assigned, team, otherAdults } = report;
+  const teamCard = (
+    <StudentTeamCard
+      studentId={student.id}
+      displayName={student.displayName}
+      currentAdultId={session.user.id}
+      team={team}
+      active={student.active}
+    />
+  );
 
   // Consentimento revogado: nenhum dado de desempenho é exibido; só as opções de privacidade.
   if (!student.active) {
@@ -64,6 +74,7 @@ export default async function AlunoReportPage({
           O acesso da criança está bloqueado e os dados dela não são exibidos nem usados. Registre um novo
           consentimento para reativar, ou exclua os dados.
         </Feedback>
+        {teamCard}
         <StudentPrivacyCard
           studentId={student.id}
           displayName={student.displayName}
@@ -238,6 +249,8 @@ export default async function AlunoReportPage({
         </section>
       ) : null}
 
+      {teamCard}
+
       <ResetPinCard studentId={student.id} displayName={student.displayName} />
 
       <Card className="flex flex-col gap-4">
@@ -251,6 +264,36 @@ export default async function AlunoReportPage({
           }))}
         />
       </Card>
+
+      <section aria-labelledby="atribuidas" className="flex flex-col gap-4">
+        <h2 id="atribuidas" className="text-subtitle">Atividades atribuídas</h2>
+        {assigned.length === 0 ? (
+          <p className="text-ink-muted">Nenhuma atividade atribuída ainda.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-left text-label">
+              <thead>
+                <tr>
+                  <th scope="col" className="pb-2 pr-4">Atividade</th>
+                  <th scope="col" className="pb-2 pr-4">Módulo</th>
+                  <th scope="col" className="pb-2 pr-4">Atribuída por</th>
+                  <th scope="col" className="pb-2">Quando</th>
+                </tr>
+              </thead>
+              <tbody>
+                {assigned.map((a) => (
+                  <tr key={a.id} className="border-t border-border-subtle">
+                    <th scope="row" className="py-2 pr-4">{a.title}</th>
+                    <td className="py-2 pr-4">{MODULE_LABEL[a.module] ?? a.module}</td>
+                    <td className="py-2 pr-4">{a.assignedByYou ? "Você" : a.assignedByName}</td>
+                    <td className="py-2">{formatShortDate(a.assignedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <StudentPrivacyCard
         studentId={student.id}

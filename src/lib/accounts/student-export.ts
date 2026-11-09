@@ -7,7 +7,8 @@ export interface StudentExport {
   aluno: { apelido: string; codigoDeAcesso: string | null; ativo: boolean; criadoEm: string };
   perfilSensorial: Record<string, unknown> | null;
   consentimentos: { versaoDoTermo: string; situacao: string; registradoEm: string; revogadoEm: string | null }[];
-  atividadesAtribuidas: { atividade: string; modulo: string; atribuidaEm: string }[];
+  profissionais: { nome: string; papel: string; vinculadoEm: string }[];
+  atividadesAtribuidas: { atividade: string; modulo: string; atribuidaEm: string; atribuidaPor: string }[];
   sessoes: {
     inicio: string;
     fim: string | null;
@@ -75,9 +76,17 @@ export async function exportStudentData(
         orderBy: { createdAt: "asc" },
         select: { termsVersion: true, status: true, createdAt: true, revokedAt: true },
       },
+      guidances: {
+        orderBy: { createdAt: "asc" },
+        select: { createdAt: true, adult: { select: { displayName: true, role: true } } },
+      },
       assignments: {
         orderBy: { createdAt: "asc" },
-        select: { createdAt: true, activity: { select: { title: true, module: true } } },
+        select: {
+          createdAt: true,
+          activity: { select: { title: true, module: true } },
+          assigner: { select: { displayName: true } },
+        },
       },
       sessions: {
         orderBy: { startedAt: "asc" },
@@ -120,10 +129,16 @@ export async function exportStudentData(
       registradoEm: c.createdAt.toISOString(),
       revogadoEm: iso(c.revokedAt),
     })),
+    profissionais: s.guidances.map((g) => ({
+      nome: g.adult.displayName,
+      papel: g.adult.role,
+      vinculadoEm: g.createdAt.toISOString(),
+    })),
     atividadesAtribuidas: s.assignments.map((a) => ({
       atividade: a.activity.title,
       modulo: a.activity.module,
       atribuidaEm: a.createdAt.toISOString(),
+      atribuidaPor: a.assigner.displayName,
     })),
     sessoes: s.sessions.map((x) => ({
       inicio: x.startedAt.toISOString(),

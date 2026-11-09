@@ -3,7 +3,6 @@ import { getInactiveStudents, getStudentReport, getStudentsOverview, guidesStude
 const m = {
   guidanceFind: jest.fn(),
   guidanceMany: jest.fn(),
-  guidanceCount: jest.fn(),
   userFind: jest.fn(),
   sessionMany: jest.fn(),
   attemptMany: jest.fn(),
@@ -19,7 +18,6 @@ jest.mock("@/lib/db", () => ({
     guidance: {
       findUnique: (...a: unknown[]) => m.guidanceFind(...a),
       findMany: (...a: unknown[]) => m.guidanceMany(...a),
-      count: (...a: unknown[]) => m.guidanceCount(...a),
     },
     user: { findFirst: (...a: unknown[]) => m.userFind(...a) },
     activitySession: {
@@ -125,13 +123,42 @@ describe("getStudentsOverview", () => {
 describe("getStudentReport", () => {
   beforeEach(() => {
     m.guidanceFind.mockResolvedValue({ id: "g1" });
-    m.guidanceCount.mockResolvedValue(1);
+    m.guidanceMany.mockResolvedValue([
+      { adult: { id: "prof1", displayName: "Ana", role: "TEACHER" } },
+      { adult: { id: "prof2", displayName: "Bia", role: "THERAPIST" } },
+    ]);
     m.userFind.mockResolvedValue({ id: "stu1", displayName: "Sol", active: true });
     m.activityMany.mockResolvedValue([
       { id: "a1", title: "Letras", module: "GRAFIA" },
       { id: "a2", title: "Contas", module: "MATEMATICA" },
     ]);
-    m.assignmentMany.mockResolvedValue([{ activityId: "a1" }]);
+    m.assignmentMany.mockResolvedValue([
+      {
+        activityId: "a1",
+        assignedBy: "prof2",
+        createdAt: NOW,
+        activity: { title: "Letras", module: "GRAFIA", published: true },
+        assigner: { displayName: "Bia" },
+      },
+      {
+        activityId: "a9",
+        assignedBy: "prof1",
+        createdAt: NOW,
+        activity: { title: "Rascunho", module: "GRAFIA", published: false },
+        assigner: { displayName: "Ana" },
+      },
+    ]);
+  });
+
+  it("mostra quem acompanha e quem atribuiu cada atividade publicada", async () => {
+    m.sessionMany.mockResolvedValue([]);
+    const report = await getStudentReport("prof1", "stu1", 30, NOW);
+    expect(report?.team.map((a) => a.displayName)).toEqual(["Ana", "Bia"]);
+    expect(report?.otherAdults).toBe(1);
+    expect(report?.assigned).toEqual([
+      { id: "a1", title: "Letras", module: "GRAFIA", assignedAt: NOW, assignedByName: "Bia", assignedByYou: false },
+    ]);
+    expect(report?.assignable.map((a) => a.id)).toEqual(["a2"]);
   });
 
   it("devolve null (e não toca no aluno) se o adulto não tem vínculo — LGPD", async () => {
@@ -163,7 +190,7 @@ describe("getStudentReport", () => {
 describe("aluno desativado (consentimento revogado)", () => {
   it("o relatório não lê nenhum dado de desempenho, só informa o necessário para reativar ou excluir", async () => {
     m.guidanceFind.mockResolvedValue({ id: "g1" });
-    m.guidanceCount.mockResolvedValue(2);
+    m.guidanceMany.mockResolvedValue([{ adult: { id: "prof1", displayName: "prof1", role: "TEACHER" } }, { adult: { id: "prof2", displayName: "prof2", role: "TEACHER" } }, { adult: { id: "prof3", displayName: "prof3", role: "TEACHER" } }]);
     m.userFind.mockResolvedValue({ id: "stu1", displayName: "Sol", active: false });
 
     const report = await getStudentReport("prof1", "stu1", 30, NOW);
@@ -216,7 +243,7 @@ describe("sessões interrompidas", () => {
 
   it("o relatório lista as interrompidas à parte e elas NÃO entram nos números de autonomia", async () => {
     m.guidanceFind.mockResolvedValue({ id: "g1" });
-    m.guidanceCount.mockResolvedValue(0);
+    m.guidanceMany.mockResolvedValue([{ adult: { id: "prof1", displayName: "prof1", role: "TEACHER" } }]);
     m.userFind.mockResolvedValue({ id: "stu1", displayName: "Sol", active: true });
     m.activityMany.mockResolvedValue([]);
     m.assignmentMany.mockResolvedValue([]);
@@ -235,7 +262,7 @@ describe("sessões interrompidas", () => {
 
   it("aluno desativado não tem sessões interrompidas exibidas nem consulta de uso", async () => {
     m.guidanceFind.mockResolvedValue({ id: "g1" });
-    m.guidanceCount.mockResolvedValue(0);
+    m.guidanceMany.mockResolvedValue([{ adult: { id: "prof1", displayName: "prof1", role: "TEACHER" } }]);
     m.userFind.mockResolvedValue({ id: "stu1", displayName: "Sol", active: false });
     const report = await getStudentReport("prof1", "stu1", 30, NOW);
     expect(report?.interrupted).toEqual([]);
