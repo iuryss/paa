@@ -36,6 +36,7 @@ Design: veio de um artefato no Claude Design e foi copiado para `design/` (`toke
 - Entrada por e-mail + senha; convite por e-mail; "esqueci minha senha" com link de uso único.
 - Painel com cartões dos alunos, relatório por aluno (autonomia, tendência, tempo, ajuda) e gráficos.
 - **Sessões interrompidas** (ver 6.5): aviso no cartão e tabela no relatório.
+- **Acompanhamento em equipe:** cartão "Quem acompanha" no relatório do aluno. Quem já acompanha adiciona um colega pelo e-mail (a conta precisa existir), e o vínculo (`Guidance`) vale na hora. Decisão do usuário: **todos iguais**, sem responsável principal; qualquer vinculado remove colegas e exclui o aluno. Regras em `src/lib/accounts/student-team.ts`: o último adulto não sai (bloqueio `FOR UPDATE` na linha do aluno contra remoções simultâneas), com consentimento revogado ninguém novo entra, e o aviso por e-mail não cita o apelido. A tabela "Atividades atribuídas" mostra quem atribuiu.
 - Editor de atividades (criar, editar, duplicar) dos 5 módulos (inclui **Escrever o nome**, ver seção 11). Qualquer profissional pode publicar; cabe ao professor do aluno decidir o que usar.
 - **Folha de exercícios** (`FOLHA`, substituiu as "Perguntas livres" `LIVRE`, convertidas pela migração `20261028120100`): bloco de apoio no topo (leitura de até 800 caracteres com `**destaques**`, figura e exemplo resolvido), sempre à vista, e até 12 exercícios misturados: **escolha** (2–4 respostas, uma certa), **marcar todas** (2–4, várias certas, cada toque conferido na hora) e **verdadeiro ou falso** (1–6 frases, uma por vez; chave de telemetria `item-N-sK`). Cada exercício pode ter apoio próprio. As figuras vêm da lista fechada `ICON_NAMES` (35 pictogramas, sem URL externa nem upload). O servidor confere tudo pelo conteúdo salvo (`isCorrectOption`).
 - Em cada atividade o professor escolhe o estilo dos marcadores (`Activity.markerStyle`: cores e formas, só formas ou só cores). O estilo pode mudar mesmo com a atividade travada por sessões.
@@ -115,7 +116,6 @@ Provedores: `console` (só desenvolvimento), `gmail` (SMTP do Gmail com **senha 
 - **Textos legais** ainda estão como "Versão de trabalho" até a escola/jurista aprovar; depois, `LEGAL_REVIEWED=true`.
 - **Neon está em us-east-1:** para a LGPD (transferência internacional), o ideal é migrar para São Paulo.
 - O botão **"Sons" não toca nada** ainda.
-- Não há UI para vincular um aluno a mais de um profissional.
 - Sem política de retenção/expurgo, Sentry nem CSP.
 - Atualizações grandes adiadas: Next 16, Tailwind 4, Prisma 7.
 - Nenhum teste com leitor de tela real (NVDA, VoiceOver) nem tablet físico.

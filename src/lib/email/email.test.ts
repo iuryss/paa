@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { readEmailConfig } from "./config";
 import { sendEmail, type EmailMessage } from "./send";
-import { escapeHtml, invitationEmail, passwordResetEmail } from "./templates";
+import { escapeHtml, invitationEmail, passwordResetEmail, studentSharedEmail } from "./templates";
 
 const message: EmailMessage = {
   to: "ana@escola.com",
@@ -83,5 +83,15 @@ describe("templates", () => {
 
   it("escapeHtml cobre os 5 caracteres especiais", () => {
     expect(escapeHtml(`<a href="x">'&'</a>`)).toBe("&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;");
+  });
+});
+
+describe("aviso de novo aluno", () => {
+  it("diz quem adicionou, traz o link e não cita nenhum aluno", () => {
+    const mail = studentSharedEmail({ to: "bia@escola.com", name: "Bia", actorName: "Ana", link: "https://x.test/professor" });
+    expect(mail.to).toBe("bia@escola.com");
+    expect(mail.text).toContain("Ana adicionou você");
+    expect(mail.text).toContain("https://x.test/professor");
+    expect(mail.html).toContain("https://x.test/professor");
   });
 });

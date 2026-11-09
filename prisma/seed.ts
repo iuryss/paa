@@ -1,6 +1,7 @@
 /**
  * Dados de DESENVOLVIMENTO. Recusa rodar em produção.
  * Professor: teacher@example.test / DevTeacher#2026
+ * Colega:    terapeuta@example.test / DevTeacher#2026 (sem alunos: para testar o acompanhamento em equipe)
  * Aluno:     código DEMO-2345 / PIN 1234
  */
 import { PrismaClient } from "@prisma/client";
@@ -20,6 +21,17 @@ async function main() {
       role: "TEACHER",
       email: "teacher@example.test",
       displayName: "Professora Demo",
+      passwordHash: await hashSecret("DevTeacher#2026"),
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { email: "terapeuta@example.test" },
+    update: {},
+    create: {
+      role: "THERAPIST",
+      email: "terapeuta@example.test",
+      displayName: "Terapeuta Demo",
       passwordHash: await hashSecret("DevTeacher#2026"),
     },
   });

@@ -63,6 +63,11 @@ export const changePasswordSchema = z
     path: ["newPassword"],
   });
 
+/** E-mail do colega que vai acompanhar o aluno. */
+export const addAdultSchema = z
+  .object({ email: z.string().trim().toLowerCase().email("Informe um e-mail válido.").max(254) })
+  .strict();
+
 export type InviteInput = z.infer<typeof inviteSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
