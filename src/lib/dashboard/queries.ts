@@ -1,11 +1,21 @@
-import type { Role } from "@prisma/client";
+import type { Prisma, Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { closeStaleSessions } from "@/lib/telemetry";
 import {
   summarizeByModule,
   summarizeSession,
   summarizeStudent,
+  type ActivitySummary,
+  type DifficultySummary,
+  type Engagement,
   type ModuleSummary,
+  type StartVsNow,
+  type WeekHelp,
+  engagementOf,
+  helpByWeek,
+  startVsNow,
+  summarizeByActivity,
+  summarizeByDifficulty,
   type SessionMetrics,
   type StudentSummary,
 } from "@/lib/dashboard/metrics";
@@ -31,10 +41,19 @@ export async function guidesStudent(adultId: string, studentId: string): Promise
 
 async function metricsForStudent(studentId: string, days: Period, now: Date): Promise<SessionMetrics[]> {
   const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  return loadMetrics({ studentId, status: "COMPLETED", startedAt: { gte: since } }, "asc", MAX_SESSIONS);
+}
+
+/** Sessões que batem com `where` → métricas, já com as tentativas de cada uma. */
+async function loadMetrics(
+  where: Prisma.ActivitySessionWhereInput,
+  order: "asc" | "desc",
+  take: number,
+): Promise<SessionMetrics[]> {
   const sessions = await prisma.activitySession.findMany({
-    where: { studentId, status: "COMPLETED", startedAt: { gte: since } },
-    orderBy: { startedAt: "asc" },
-    take: MAX_SESSIONS,
+    where,
+    orderBy: { startedAt: order },
+    take,
     select: {
       id: true,
       startedAt: true,
@@ -43,6 +62,7 @@ async function metricsForStudent(studentId: string, days: Period, now: Date): Pr
       correctCount: true,
       redirects: true,
       maxHelpLevel: true,
+      difficultyUsed: true,
       activity: { select: { title: true, module: true } },
     },
   });
@@ -72,6 +92,7 @@ async function metricsForStudent(studentId: string, days: Period, now: Date): Pr
         correctCount: s.correctCount,
         redirects: s.redirects,
         maxHelpLevel: s.maxHelpLevel,
+        difficulty: s.difficultyUsed,
       },
       attempts.filter((a) => a.sessionId === s.id),
     ),
@@ -152,6 +173,22 @@ async function interruptedForStudent(studentId: string, days: Period, now: Date)
   }));
 }
 
+/** Primeiras × últimas sessões concluídas desde o início, sem depender do período escolhido. */
+async function startVsNowFor(studentId: string): Promise<StartVsNow> {
+  const where = { studentId, status: "COMPLETED" as const };
+  const [earliest, latest, total] = await Promise.all([
+    loadMetrics(where, "asc", 3),
+    loadMetrics(where, "desc", 3),
+    prisma.activitySession.count({ where }),
+  ]);
+  return startVsNow(earliest, latest, total);
+}
+
+function abandonedCount(studentId: string, days: Period, now: Date): Promise<number> {
+  const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  return prisma.activitySession.count({ where: { studentId, status: "ABANDONED", startedAt: { gte: since } } });
+}
+
 export interface StudentReport {
   student: { id: string; displayName: string; active: boolean };
   /** Outros profissionais que também acompanham o aluno (a exclusão apaga para todos). */
@@ -162,6 +199,13 @@ export interface StudentReport {
   interrupted: InterruptedSession[];
   summary: StudentSummary;
   byModule: ModuleSummary[];
+  /** Começo do uso × agora (desde a primeira sessão, independente do período). */
+  startVsNow: StartVsNow;
+  byDifficulty: DifficultySummary[];
+  /** Da menor autonomia para a maior. */
+  byActivity: ActivitySummary[];
+  weeks: WeekHelp[];
+  engagement: Engagement;
   assignable: { id: string; title: string; module: string }[];
   /** Adultos que acompanham o aluno, do vínculo mais antigo ao mais novo. */
   team: StudentTeamMember[];
@@ -224,15 +268,22 @@ export async function getStudentReport(
       interrupted: [],
       summary: summarizeStudent([]),
       byModule: [],
+      startVsNow: startVsNow([], [], 0),
+      byDifficulty: [],
+      byActivity: [],
+      weeks: [],
+      engagement: engagementOf([], 0, days),
       assignable: [],
     };
   }
 
   await closeStaleSessions({ now, studentIds: [studentId] });
 
-  const [sessions, interrupted, published, assignments, team] = await Promise.all([
+  const [sessions, interrupted, abandoned, comparison, published, assignments, team] = await Promise.all([
     metricsForStudent(studentId, days, now),
     interruptedForStudent(studentId, days, now),
+    abandonedCount(studentId, days, now),
+    startVsNowFor(studentId),
     prisma.activity.findMany({
       where: { published: true },
       orderBy: { title: "asc" },
@@ -276,6 +327,11 @@ export async function getStudentReport(
     interrupted,
     summary: summarizeStudent(sessions),
     byModule: summarizeByModule(sessions),
+    startVsNow: comparison,
+    byDifficulty: summarizeByDifficulty(sessions),
+    byActivity: summarizeByActivity(sessions),
+    weeks: helpByWeek(sessions),
+    engagement: engagementOf(sessions, abandoned, days),
     assignable: published.filter((a) => !taken.has(a.id)),
   };
 }

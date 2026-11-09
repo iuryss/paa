@@ -26,7 +26,7 @@ export async function startSession(
 ): Promise<{ sessionId: string }> {
   const assignment = await prisma.assignment.findFirst({
     where: { studentId, activityId, activity: { published: true } },
-    select: { id: true },
+    select: { id: true, activity: { select: { difficulty: true } } },
   });
   if (!assignment) throw new TelemetryError("not_found");
 
@@ -41,6 +41,7 @@ export async function startSession(
       activityId,
       themeUsed: profile?.theme,
       contentModeUsed: profile?.contentMode,
+      difficultyUsed: assignment.activity.difficulty,
     },
     select: { id: true },
   });

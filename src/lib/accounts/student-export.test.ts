@@ -40,6 +40,7 @@ const student = {
       maxHelpLevel: "VERBAL_HINT",
       themeUsed: "CALMO",
       contentModeUsed: "TEXTUAL",
+      difficultyUsed: "INICIAL",
       activity: { title: "Letras", module: "GRAFIA" },
       attempts: [
         { itemKey: "item-1", correct: false, helpLevel: "NONE", elapsedMs: 1800, attemptNo: 1, createdAt: d("2026-10-01T10:00:10Z") },
@@ -74,7 +75,7 @@ describe("exportStudentData", () => {
     expect(result.data.atividadesAtribuidas).toEqual([
       { atividade: "Letras", modulo: "GRAFIA", atribuidaEm: "2026-09-02T10:00:00.000Z", atribuidaPor: "Ana" },
     ]);
-    expect(result.data.sessoes[0]).toMatchObject({ tentativas: 2, acertos: 1, redirecionamentos: 1, maiorAjuda: "VERBAL_HINT" });
+    expect(result.data.sessoes[0]).toMatchObject({ tentativas: 2, acertos: 1, redirecionamentos: 1, maiorAjuda: "VERBAL_HINT", dificuldadeUsada: "INICIAL" });
     expect(result.data.sessoes[0]!.respostas).toHaveLength(2);
     expect(result.data.sessoes[0]!.respostas[1]).toMatchObject({ item: "item-1", acertou: true, numeroDaTentativa: 2, tempoMs: 4200 });
   });

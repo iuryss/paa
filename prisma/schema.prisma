@@ -250,6 +250,8 @@ model ActivitySession {
   /// Snapshot do tema/modo usado (para análise sem cruzar com perfil mutável).
   themeUsed     SensoryTheme?
   contentModeUsed ContentMode?
+  /// Dificuldade da atividade quando a sessão começou (a atividade pode ser editada depois).
+  difficultyUsed  Difficulty?
 
   student  User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
   activity Activity  @relation(fields: [activityId], references: [id], onDelete: Cascade)
