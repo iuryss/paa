@@ -63,3 +63,27 @@
     transform: none !important;
   }
 }
+
+/* Impressão do relatório: sempre claro (economiza tinta e funciona mesmo no tema Alto Contraste).
+   html[data-theme] vence [data-theme="..."] de tokens.css pela especificidade. */
+@media print {
+  html[data-theme] {
+    --page: #ffffff;
+    --surface: #ffffff;
+    --surface-sunken: #f4f4f5;
+    --ink: #18181b;
+    --ink-muted: #52525b;
+    --border: #71717a;
+    --border-subtle: #d4d4d8;
+    --primary-border: #115e59;
+    --focus-ring: #18181b;
+    --shadow-rest: none;
+    --shadow-lift: none;
+  }
+
+  /* Tabelas e gráficos não se partem no meio da página. */
+  figure,
+  tr {
+    break-inside: avoid;
+  }
+}

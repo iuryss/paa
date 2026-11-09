@@ -5,6 +5,7 @@ const m = {
   guidanceMany: jest.fn(),
   userFind: jest.fn(),
   sessionMany: jest.fn(),
+  sessionCount: jest.fn(),
   attemptMany: jest.fn(),
   activityMany: jest.fn(),
   assignmentMany: jest.fn(),
@@ -22,6 +23,7 @@ jest.mock("@/lib/db", () => ({
     user: { findFirst: (...a: unknown[]) => m.userFind(...a) },
     activitySession: {
       findMany: (...a: unknown[]) => m.sessionMany(...a),
+      count: (...a: unknown[]) => m.sessionCount(...a),
       groupBy: (...a: unknown[]) => m.groupBy(...a),
     },
     attempt: { findMany: (...a: unknown[]) => m.attemptMany(...a) },
@@ -43,6 +45,7 @@ const sessionRow = {
   correctCount: 2,
   redirects: 1,
   maxHelpLevel: "NONE",
+  difficultyUsed: "INICIAL",
   activity: { title: "Letras", module: "GRAFIA" },
 };
 
@@ -68,6 +71,7 @@ beforeEach(() => {
     args.where.status === "ABANDONED" ? [interruptedRow] : [sessionRow],
   );
   m.attemptMany.mockResolvedValue(attemptRows);
+  m.sessionCount.mockResolvedValue(1);
   m.groupBy.mockResolvedValue([]);
   m.closeStale.mockResolvedValue(0);
 });
@@ -175,10 +179,41 @@ describe("getStudentReport", () => {
     expect(report?.otherAdults).toBe(1);
     expect(report?.sessions).toHaveLength(1);
     expect(report?.byModule[0]).toMatchObject({ module: "GRAFIA", sessions: 1 });
+    expect(report?.byDifficulty).toMatchObject([{ difficulty: "INICIAL", sessions: 1 }]);
+    expect(report?.byActivity).toMatchObject([{ title: "Letras", sessions: 1 }]);
+    expect(report?.weeks).toHaveLength(1);
+    expect(report?.engagement).toMatchObject({ completed: 1, interrupted: 1, completionRate: 0.5 });
+    expect(report?.startVsNow).toEqual({ status: "insufficient", total: 1, needed: 4 });
     expect(report?.assignable).toEqual([{ id: "a2", title: "Contas", module: "MATEMATICA" }]);
     expect(m.auditCreate).toHaveBeenCalledWith({
       data: { actorId: "prof1", action: "student.report.read", targetId: "stu1" },
     });
+  });
+
+  it("início × agora usa as primeiras e as últimas sessões desde sempre, fora do período", async () => {
+    const row = (id: string, day: string, help: string) => ({
+      ...sessionRow,
+      id,
+      startedAt: new Date(`2026-${day}T10:00:00Z`),
+      maxHelpLevel: help,
+    });
+    m.sessionMany.mockImplementation(async (args: { where: { status: string; startedAt?: unknown }; orderBy: { startedAt: string } }) => {
+      if (args.where.status === "ABANDONED") return [];
+      if (args.where.startedAt) return [];
+      return args.orderBy.startedAt === "asc"
+        ? [row("a", "08-01", "FULL_MODEL"), row("b", "08-02", "FULL_MODEL"), row("c", "08-03", "NONE")]
+        : [row("z", "10-06", "NONE"), row("y", "10-05", "NONE"), row("x", "10-04", "NONE")];
+    });
+    m.sessionCount.mockResolvedValue(12);
+    m.attemptMany.mockResolvedValue([]);
+
+    const report = await getStudentReport("prof1", "stu1", 30, NOW);
+    const cmp = report?.startVsNow;
+    if (cmp?.status !== "ok") throw new Error("esperava comparação");
+    expect(cmp.total).toBe(12);
+    expect(cmp.start).toMatchObject({ sessions: 3, from: new Date("2026-08-01T10:00:00Z") });
+    expect(cmp.start.adultHelpShare).toBeCloseTo(2 / 3);
+    expect(cmp.now).toMatchObject({ sessions: 3, to: new Date("2026-10-06T10:00:00Z"), adultHelpShare: 0 });
   });
 
   it("devolve null se o usuário vinculado não for aluno", async () => {

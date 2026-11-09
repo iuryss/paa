@@ -22,6 +22,7 @@ export interface StudentExport {
     maiorAjuda: string;
     temaUsado: string | null;
     modoUsado: string | null;
+    dificuldadeUsada: string | null;
     respostas: {
       item: string;
       acertou: boolean;
@@ -101,6 +102,7 @@ export async function exportStudentData(
           maxHelpLevel: true,
           themeUsed: true,
           contentModeUsed: true,
+          difficultyUsed: true,
           activity: { select: { title: true, module: true } },
           attempts: {
             orderBy: { createdAt: "asc" },
@@ -153,6 +155,7 @@ export async function exportStudentData(
       maiorAjuda: x.maxHelpLevel,
       temaUsado: x.themeUsed,
       modoUsado: x.contentModeUsed,
+      dificuldadeUsada: x.difficultyUsed,
       respostas: x.attempts.map((t) => ({
         item: t.itemKey,
         acertou: t.correct,

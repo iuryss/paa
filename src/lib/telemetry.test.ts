@@ -61,8 +61,8 @@ beforeEach(() => {
 });
 
 describe("startSession", () => {
-  it("abre sessão guardando o tema/modo usados no momento", async () => {
-    m.assignmentFindFirst.mockResolvedValue({ id: "as1" });
+  it("abre sessão guardando o tema/modo e a dificuldade usados no momento", async () => {
+    m.assignmentFindFirst.mockResolvedValue({ id: "as1", activity: { difficulty: "INTERMEDIARIO" } });
     m.profileFind.mockResolvedValue({ theme: "FOCO", contentMode: "PICTOGRAFICO" });
     m.sessionCreate.mockResolvedValue({ id: "sess1" });
 
@@ -72,7 +72,13 @@ describe("startSession", () => {
     );
     expect(m.sessionCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { studentId: "stu1", activityId: "act1", themeUsed: "FOCO", contentModeUsed: "PICTOGRAFICO" },
+        data: {
+          studentId: "stu1",
+          activityId: "act1",
+          themeUsed: "FOCO",
+          contentModeUsed: "PICTOGRAFICO",
+          difficultyUsed: "INTERMEDIARIO",
+        },
       }),
     );
   });

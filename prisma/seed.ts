@@ -410,6 +410,7 @@ async function main() {
         maxHelpLevel: i < 4 ? "VERBAL_HINT" : "NONE",
         themeUsed: "CALMO",
         contentModeUsed: "TEXTUAL",
+        difficultyUsed: "INICIAL", // as atividades do seed usam a dificuldade padrão
         attempts: { create: attempts },
       },
     });
